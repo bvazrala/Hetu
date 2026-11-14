@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "description": "Seed examples for Hetu. Each has a problem, a student draft, and the judgment a careful reader should reach. They are the start of the evaluation set. Any sample_analysis is written by hand and is not model output.",
+  "examples": [
+    {
+      "id": "parity-square-incomplete",
+      "title": "Even square, incomplete proof",
+      "problem": "Prove that if the integer n² is even, then n is even.",
+      "draft": "Assume n² = 2k for some integer k. Then n = √(2k), so n must be even.",
+      "expected": "incomplete",
+      "notes": "The theorem is true. The last step is not justified by the steps before it.",
+      "sample_analysis": {
+        "source": "sample",
+        "nodes": [
+          {
+            "id": "n1",
+            "type": "assumption",
+            "text": "Assume n² = 2k for some integer k.",
+            "span": {
+              "start": 0,
+              "end": 34
+            }
+          },
+          {
+            "id": "n2",
+            "type": "inference",
+            "text": "Then n = √(2k)",
+            "span": {
+              "start": 35,
+              "end": 49
+            }
+          },
+          {
+            "id": "n3",
+            "type": "conclusion",
+            "text": "so n must be even.",
+            "span": {
+              "start": 51,
+              "end": 69
+            }
+          }
+        ],
+        "edges": [
+          {
+            "source": "n2",
+            "target": "n1",
+            "relation": "depends_on"
+          },
+          {
+            "source": "n3",
+            "target": "n2",
+            "relation": "depends_on"
+          }
+        ],
+        "observations": [
+          {
+            "target": "n3",
+            "issue_type": "unjustified_step",
+            "evidence": "so n must be even",
+            "verification": "not_verified",
+            "question": "Why does taking the square root of 2k establish that n is divisible by two?",
+            "hint": "Consider the contrapositive. What can you say about n² when n is odd?"
+          }
+        ],
+        "limitations": [
+          "This sample was written by hand for the unedited example draft. No model or checker produced it."
+        ]
+      }
+    },
+    {
+      "id": "even-sum-correct",
+      "title": "Sum of two even integers, correct proof",
+      "problem": "Prove that the sum of two even integers is even.",
+      "draft": "Let a = 2m and b = 2n for some integers m and n. Then a + b = 2m + 2n = 2(m + n). Since m + n is an integer, a + b is even.",
+      "expected": "correct",
+      "notes": "Every step follows. An analysis should not report a gap here."
+    },
+    {
+      "id": "square-divisible-by-four-invalid",
+      "title": "Square divisible by four, invalid inference",
+      "problem": "Prove that if n² is divisible by 4, then n is divisible by 4.",
+      "draft": "Assume n² = 4k for some integer k. Then 4 divides n · n, so 4 divides n.",
+      "expected": "invalid",
+      "notes": "The claim is false. n = 2 is a counterexample: 4 divides 4, but 4 does not divide 2. The step from '4 divides n · n' to '4 divides n' is invalid because 4 is not prime."
+    }
+  ]
+}

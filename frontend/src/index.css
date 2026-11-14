@@ -1,0 +1,30 @@
+@import 'tailwindcss';
+
+/* Design tokens. Tailwind turns each into utilities such as bg-paper. */
+@theme {
+  --color-paper: #f7f4ec;
+  --color-surface: #fdfcf8;
+  --color-ink: #1f2420;
+  --color-muted: #5a615b;
+  --color-rule: #d9d4c5;
+  --color-accent: #1f5a43;
+  --color-accent-strong: #174634;
+  --color-accent-soft: #e4eee8;
+
+  /* System fonts only, so the page does not depend on a font server. */
+  --font-serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+@layer base {
+  html {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+}

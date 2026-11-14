@@ -1,0 +1,24 @@
+[project]
+name = "hetu-backend"
+version = "0.1.0"
+description = "API for Hetu, a reasoning workspace for students."
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "pydantic-settings>=2.6",
+    "uvicorn[standard]>=0.32",
+]
+
+[dependency-groups]
+dev = [
+    "httpx2>=1.0",
+    "pytest>=8.3",
+]
+
+# The backend is run in place and is not built as an installable package.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
