@@ -82,6 +82,38 @@
       "draft": "Assume n² = 4k for some integer k. Then 4 divides n · n, so 4 divides n.",
       "expected": "invalid",
       "notes": "The claim is false. n = 2 is a counterexample: 4 divides 4, but 4 does not divide 2. The step from '4 divides n · n' to '4 divides n' is invalid because 4 is not prime."
+    },
+    {
+      "id": "parity-square-contrapositive-correct",
+      "title": "Even square, correct proof by contrapositive",
+      "problem": "Prove that if the integer n² is even, then n is even.",
+      "draft": "I will prove the contrapositive: if n is odd, then n² is odd. Let n = 2k + 1 for some integer k. Then n² = 4k² + 4k + 1 = 2(2k² + 2k) + 1, which is odd. So if n² is even, n must be even.",
+      "expected": "correct",
+      "notes": "A complete proof of the same theorem as the first example. It is what a student might write after revising. An analysis should not report a gap."
+    },
+    {
+      "id": "odd-product-correct",
+      "title": "Product of two odd integers, correct proof",
+      "problem": "Prove that the product of two odd integers is odd.",
+      "draft": "Let a = 2m + 1 and b = 2n + 1 for some integers m and n. Then ab = 4mn + 2m + 2n + 1 = 2(2mn + m + n) + 1. Since 2mn + m + n is an integer, ab is odd.",
+      "expected": "correct",
+      "notes": "Every step follows. An analysis should not report a gap."
+    },
+    {
+      "id": "consecutive-product-incomplete",
+      "title": "n² + n is even, incomplete proof",
+      "problem": "Prove that n² + n is even for every integer n.",
+      "draft": "We can factor n² + n = n(n + 1). So n² + n is even.",
+      "expected": "incomplete",
+      "notes": "The claim is true. The draft never says why n(n + 1) is even. The missing idea is that one of two consecutive integers is even."
+    },
+    {
+      "id": "even-sum-converse-invalid",
+      "title": "Even sum, invalid inference",
+      "problem": "Prove that if a + b is even, then a and b are both even.",
+      "draft": "Assume a + b = 2k for some integer k. An even number is a sum of even numbers, so a and b are both even.",
+      "expected": "invalid",
+      "notes": "The claim is false. a = 1 and b = 1 is a counterexample: the sum is even and neither number is. The draft confuses a statement with its converse."
     }
   ]
 }

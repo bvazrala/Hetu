@@ -3,7 +3,10 @@ import type { Analysis, ReasoningNode } from '../../lib/types'
 interface Props {
   draft: string
   analysis: Analysis | null
-  onLoadExample: () => void
+  /** True when an analysis exists but the draft has changed since. */
+  stale: boolean
+  /** Why live analysis failed, when the hand-written sample is shown instead. */
+  fallbackReason: string | null
 }
 
 const TYPE_LABELS: Record<ReasoningNode['type'], string> = {
@@ -13,22 +16,16 @@ const TYPE_LABELS: Record<ReasoningNode['type'], string> = {
   conclusion: 'Conclusion',
 }
 
-export function StructuredView({ draft, analysis, onLoadExample }: Props) {
+export function StructuredView({ draft, analysis, stale, fallbackReason }: Props) {
   if (!analysis) {
     return (
       <div className="rounded-md border border-dashed border-rule px-5 py-8 text-center">
-        <p className="font-medium">No structure to show yet.</p>
+        <p className="font-medium">{stale ? 'Your draft has changed.' : 'Nothing inspected yet.'}</p>
         <p className="mx-auto mt-2 max-w-md text-sm text-muted">
-          Live analysis is not connected, so Hetu cannot read your own draft yet. The unedited example has a sample
-          written by hand. Your draft is unchanged in Freeform.
+          {stale
+            ? 'The last analysis no longer matches what you wrote. Switch to Freeform and inspect again.'
+            : 'Switch to Freeform, write your reasoning, and select Inspect reasoning.'}
         </p>
-        <button
-          type="button"
-          onClick={onLoadExample}
-          className="mt-5 rounded-md border border-accent px-5 py-2.5 font-medium text-accent transition-colors hover:bg-accent-soft"
-        >
-          Try an example
-        </button>
       </div>
     )
   }
@@ -40,12 +37,19 @@ export function StructuredView({ draft, analysis, onLoadExample }: Props) {
 
   return (
     <div className="space-y-8">
-      {analysis.source === 'sample' && (
-        <p className="border-l-2 border-accent pl-3 text-sm text-muted">
-          <span className="font-medium text-ink">Sample analysis.</span> Written by hand for this example. No model was
-          called.
-        </p>
-      )}
+      <p className="border-l-2 border-accent pl-3 text-sm text-muted">
+        {analysis.source === 'sample' ? (
+          <>
+            <span className="font-medium text-ink">Sample analysis.</span> Written by hand for this example. No model
+            was called.{fallbackReason && ` Shown because live analysis failed: ${fallbackReason}`}
+          </>
+        ) : (
+          <>
+            <span className="font-medium text-ink">Model analysis.</span> A model read your draft. It can misread a
+            step, so treat this as a second reader, not a grade.
+          </>
+        )}
+      </p>
 
       <section aria-labelledby="draft-heading">
         <h2 id="draft-heading" className="mb-2 text-sm font-medium text-muted">
@@ -108,6 +112,15 @@ export function StructuredView({ draft, analysis, onLoadExample }: Props) {
           })}
         </ol>
       </section>
+
+      {!observation && (
+        <div className="rounded-md bg-accent-soft px-4 py-3">
+          <p className="font-medium text-accent-strong">No question this time.</p>
+          <p className="mt-1 text-sm">
+            Hetu did not find a step to question. That is one reader's view, not a proof that the argument is correct.
+          </p>
+        </div>
+      )}
 
       {analysis.limitations.length > 0 && (
         <section aria-labelledby="limits-heading">

@@ -1,7 +1,10 @@
+import { MAX_DRAFT_CHARS, MAX_PROBLEM_CHARS } from '../../lib/api'
+
 interface Props {
   problem: string
   draft: string
-  canInspect: boolean
+  busy: boolean
+  error: string | null
   onProblemChange: (value: string) => void
   onDraftChange: (value: string) => void
   onLoadExample: () => void
@@ -15,12 +18,15 @@ const fieldClass =
 export function FreeformEditor({
   problem,
   draft,
-  canInspect,
+  busy,
+  error,
   onProblemChange,
   onDraftChange,
   onLoadExample,
   onInspect,
 }: Props) {
+  const canInspect = draft.trim().length > 0 && !busy
+
   return (
     <div className="space-y-6">
       <div>
@@ -30,6 +36,7 @@ export function FreeformEditor({
         <textarea
           id="problem"
           rows={2}
+          maxLength={MAX_PROBLEM_CHARS}
           value={problem}
           onChange={(e) => onProblemChange(e.target.value)}
           placeholder="What are you trying to show?"
@@ -44,6 +51,7 @@ export function FreeformEditor({
         <textarea
           id="draft"
           rows={9}
+          maxLength={MAX_DRAFT_CHARS}
           value={draft}
           onChange={(e) => onDraftChange(e.target.value)}
           placeholder="Write it your way. Rough steps are fine."
@@ -59,22 +67,33 @@ export function FreeformEditor({
           aria-describedby="inspect-note"
           className="rounded-md bg-accent px-5 py-2.5 font-medium text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-rule disabled:text-muted"
         >
-          Inspect reasoning
+          {busy ? 'Inspecting…' : 'Inspect reasoning'}
         </button>
         <button
           type="button"
           onClick={onLoadExample}
-          className="rounded-md border border-accent px-5 py-2.5 font-medium text-accent transition-colors hover:bg-accent-soft"
+          disabled={busy}
+          className="rounded-md border border-accent px-5 py-2.5 font-medium text-accent transition-colors hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
         >
           Try an example
         </button>
       </div>
 
-      <p id="inspect-note" className="text-sm text-muted">
-        {canInspect
-          ? 'This is the unedited example. Inspect shows a sample written by hand, not a live analysis.'
-          : 'Live analysis is not connected yet. Load the example to see a sample written by hand.'}
-      </p>
+      {/* One live region, so screen readers hear each change of state. */}
+      <div id="inspect-note" aria-live="polite" className="min-h-10 text-sm">
+        {busy ? (
+          <p className="text-muted">Reading your draft. This usually takes a few seconds.</p>
+        ) : error ? (
+          <p className="border-l-2 border-accent pl-3">
+            <span className="font-medium">{error}</span>{' '}
+            <span className="text-muted">Your draft is unchanged. You can try again.</span>
+          </p>
+        ) : (
+          <p className="text-muted">
+            Hetu asks a model to read your draft and question one step. It does not write the proof.
+          </p>
+        )}
+      </div>
     </div>
   )
 }

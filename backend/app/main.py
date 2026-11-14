@@ -1,15 +1,19 @@
-"""Hetu API.
+"""Hetu API: `GET /health` and `POST /analyze`."""
 
-Only the health check exists so far. `POST /analyze` is planned and will
-return the `Analysis` shape defined in `app/schemas.py`.
-"""
+import asyncio
+import logging
+from functools import lru_cache
+from typing import Annotated
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.agents import Analyzer, build_analyzer
 from app.config import get_settings
-from app.schemas import HealthResponse
+from app.llm import InferenceNotConfigured
+from app.schemas import Analysis, AnalyzeRequest, HealthResponse
 
+logger = logging.getLogger("hetu")
 settings = get_settings()
 
 app = FastAPI(title="Hetu API", version="0.1.0")
@@ -24,6 +28,39 @@ app.add_middleware(
 )
 
 
+@lru_cache
+def _cached_analyzer() -> Analyzer:
+    # Built on first use and then reused. A failed build is not cached.
+    return build_analyzer(get_settings())
+
+
+def get_analyzer() -> Analyzer:
+    """Dependency that provides the workflow, or answers 503 if it cannot be built."""
+    try:
+        return _cached_analyzer()
+    except InferenceNotConfigured:
+        raise HTTPException(503, "Live analysis is not configured on this server.") from None
+    except Exception:
+        # For example: a missing API key or a provider package that is not installed.
+        logger.exception("Could not build the analysis workflow")
+        raise HTTPException(503, "Live analysis is not available on this server.") from None
+
+
 @app.get("/health")
 def health() -> HealthResponse:
     return HealthResponse(status="ok")
+
+
+@app.post("/analyze")
+async def analyze(request: AnalyzeRequest, analyzer: Annotated[Analyzer, Depends(get_analyzer)]) -> Analysis:
+    """Analyze one draft. Errors never include provider details; those go to the log."""
+    try:
+        return await asyncio.wait_for(
+            analyzer(request.problem, request.draft),
+            timeout=settings.analyze_timeout_seconds,
+        )
+    except TimeoutError:
+        raise HTTPException(504, "The analysis took too long. Please try again.") from None
+    except Exception:
+        logger.exception("Analysis failed")
+        raise HTTPException(502, "The analysis could not be completed. Please try again.") from None

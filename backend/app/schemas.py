@@ -1,18 +1,34 @@
-"""Typed shapes shared by the API and its tests.
+"""Typed shapes of the API's requests and responses.
 
-`Analysis` is a draft of what `POST /analyze` will return. No endpoint
-returns it yet. Today it is used to validate the hand-written sample in
-`examples/sample_proofs.json`, which the frontend renders in Structured mode.
-The TypeScript mirror of these types is `frontend/src/lib/types.ts`.
+`Analysis` is what `POST /analyze` returns. The hand-written sample in
+`examples/sample_proofs.json` uses the same shape, and a test keeps the two
+in step. The TypeScript mirror of these types is `frontend/src/lib/types.ts`.
 """
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class HealthResponse(BaseModel):
     status: Literal["ok"]
+
+
+# Input caps keep one request small and its cost predictable.
+MAX_PROBLEM_CHARS = 1000
+MAX_DRAFT_CHARS = 4000
+
+
+class AnalyzeRequest(BaseModel):
+    problem: str = Field(default="", max_length=MAX_PROBLEM_CHARS)
+    draft: str = Field(min_length=1, max_length=MAX_DRAFT_CHARS)
+
+    @field_validator("draft")
+    @classmethod
+    def _draft_has_content(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("The draft is empty.")
+        return value
 
 
 class Span(BaseModel):
@@ -58,8 +74,8 @@ class Observation(BaseModel):
 
 
 class Analysis(BaseModel):
-    # "sample" marks hand-written fixture content. "live" is reserved for
-    # real analysis results once inference exists.
+    # "sample" marks hand-written fixture content. "live" marks a result
+    # produced by the model workflow for this request.
     source: Literal["sample", "live"]
     nodes: list[Node]
     edges: list[Edge]

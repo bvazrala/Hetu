@@ -6,7 +6,7 @@ type Status = 'checking' | 'up' | 'down'
 const LABELS: Record<Status, string> = {
   checking: 'API: checking',
   up: 'API: connected',
-  down: 'API: not reachable. The example still works.',
+  down: 'API: not reachable. The example still shows a sample.',
 }
 
 /** Calls GET /health once on load and reports the result in plain text. */

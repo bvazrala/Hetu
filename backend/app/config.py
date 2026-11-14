@@ -6,29 +6,41 @@ if that file exists. See `backend/.env.example` for every variable.
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
+from dotenv import load_dotenv
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
+# Provider SDKs look for their own key variables, such as GROQ_API_KEY, in the
+# process environment. Loading `.env` here makes those keys visible to them
+# without this code naming any provider. Real environment variables win.
+load_dotenv(BACKEND_DIR / ".env")
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(
-        env_file=BACKEND_DIR / ".env",
-        env_prefix="HETU_",
-        extra="ignore",
-    )
+    model_config = SettingsConfigDict(env_prefix="HETU_", extra="ignore")
 
     # Comma-separated list of browser origins allowed to call the API.
     cors_origins: str = "http://localhost:5173"
 
-    # Inference is not implemented yet, so nothing reads these two values.
-    # They are the single place the future model adapter should learn which
-    # provider and model to use. Switching models should then be a change to
-    # the environment, not to the reasoning code.
+    # Which hosted model to use. These two values are read only by
+    # `app/llm.py`. Switching models is a change to the environment.
     llm_provider: str | None = None
     llm_model: str | None = None
+
+    # 0 asks the model for its most likely answer every time, so the same
+    # draft gets the same feedback as often as the provider allows.
+    llm_temperature: float = 0.0
+
+    # "deep_agent": an orchestrator that can consult a critic subagent.
+    # "direct": one structured model call. Simpler, faster, no second opinion.
+    workflow: Literal["deep_agent", "direct"] = "deep_agent"
+
+    # Upper bound on one analysis, in seconds.
+    analyze_timeout_seconds: float = 60.0
 
     @field_validator("llm_provider", "llm_model", mode="before")
     @classmethod
