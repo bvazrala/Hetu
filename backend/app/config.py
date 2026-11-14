@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     # Upper bound on one analysis, in seconds.
     analyze_timeout_seconds: float = 60.0
 
+    # Limits on POST /analyze. The first is per client address, the second
+    # is shared by all clients and bounds what one day can cost.
+    rate_limit_per_minute: int = 20
+    daily_analysis_limit: int = 500
+
     @field_validator("llm_provider", "llm_model", mode="before")
     @classmethod
     def _blank_is_unset(cls, value: str | None) -> str | None:

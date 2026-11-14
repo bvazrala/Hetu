@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import main
+from app.limits import RequestLimiter
 from app.llm import InferenceNotConfigured
 from app.schemas import MAX_DRAFT_CHARS, Analysis, Node
 
@@ -19,7 +20,9 @@ def use_analyzer(analyzer):
 
 
 @pytest.fixture(autouse=True)
-def clean_overrides():
+def clean_overrides(monkeypatch):
+    # These tests are not about request limits, so give them plenty of room.
+    monkeypatch.setattr(main, "limiter", RequestLimiter(per_minute=1000, per_day=1000))
     yield
     main.app.dependency_overrides.clear()
     main._cached_analyzer.cache_clear()

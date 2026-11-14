@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BackendStatus } from './components/BackendStatus'
 import { ModeToggle, type Mode } from './components/ModeToggle'
 import { StructuredView } from './features/reasoning/StructuredView'
@@ -28,6 +28,17 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // After a new analysis arrives, keyboard and screen reader users should
+  // land on it. The flag is set by `inspect` and used once by the effect.
+  const resultHeading = useRef<HTMLHeadingElement>(null)
+  const focusResultNext = useRef(false)
+  useEffect(() => {
+    if (focusResultNext.current && mode === 'structured') {
+      focusResultNext.current = false
+      resultHeading.current?.focus()
+    }
+  }, [inspection, mode])
+
   // An analysis is shown only while it still matches what is written.
   const isCurrent = inspection !== null && inspection.problem === problem && inspection.draft === draft
 
@@ -47,6 +58,7 @@ export default function App() {
     try {
       const analysis = await analyzeDraft(sent.problem, sent.draft)
       setInspection({ ...sent, analysis, fallbackReason: null })
+      focusResultNext.current = true
       setMode('structured')
     } catch (caught) {
       const reason = caught instanceof AnalyzeError ? caught.message : 'The analysis could not be completed.'
@@ -54,6 +66,7 @@ export default function App() {
       const sample = findSampleAnalysis(sent.problem, sent.draft)
       if (sample) {
         setInspection({ ...sent, analysis: sample, fallbackReason: reason })
+        focusResultNext.current = true
         setMode('structured')
       } else {
         setError(reason)
@@ -65,12 +78,18 @@ export default function App() {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-3xl flex-col px-5 sm:px-8">
+      <a
+        href="#main"
+        className="sr-only rounded-md bg-surface px-4 py-2 font-medium text-accent focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-10"
+      >
+        Skip to main content
+      </a>
       <header className="flex items-center justify-between gap-4 border-b border-rule py-4">
         <h1 className="font-serif text-2xl font-semibold tracking-tight">Hetu</h1>
         <ModeToggle mode={mode} onChange={setMode} />
       </header>
 
-      <main className="flex-1 py-8">
+      <main id="main" tabIndex={-1} className="flex-1 py-8">
         <p className="mb-8 max-w-xl text-muted">
           A workspace for your own reasoning. Write an argument in your own words, then look at its steps.
         </p>
@@ -92,6 +111,7 @@ export default function App() {
             analysis={isCurrent ? inspection.analysis : null}
             stale={inspection !== null && !isCurrent}
             fallbackReason={isCurrent ? inspection.fallbackReason : null}
+            headingRef={resultHeading}
           />
         )}
       </main>

@@ -5,11 +5,12 @@ import logging
 from functools import lru_cache
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.agents import Analyzer, build_analyzer
 from app.config import get_settings
+from app.limits import RequestLimiter
 from app.llm import InferenceNotConfigured
 from app.schemas import Analysis, AnalyzeRequest, HealthResponse
 
@@ -26,6 +27,20 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )
+
+
+limiter = RequestLimiter(settings.rate_limit_per_minute, settings.daily_analysis_limit)
+
+
+def enforce_limits(request: Request) -> None:
+    """Dependency that answers 429 when a client or the whole service is over its limit."""
+    # Behind a hosting proxy the caller's address arrives in X-Forwarded-For.
+    # The header can be forged, which is why the daily limit ignores it.
+    forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    client = forwarded or (request.client.host if request.client else "unknown")
+    message = limiter.check(client)
+    if message:
+        raise HTTPException(429, message, headers={"Retry-After": "60"})
 
 
 @lru_cache
@@ -51,7 +66,7 @@ def health() -> HealthResponse:
     return HealthResponse(status="ok")
 
 
-@app.post("/analyze")
+@app.post("/analyze", dependencies=[Depends(enforce_limits)])
 async def analyze(request: AnalyzeRequest, analyzer: Annotated[Analyzer, Depends(get_analyzer)]) -> Analysis:
     """Analyze one draft. Errors never include provider details; those go to the log."""
     try:

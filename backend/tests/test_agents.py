@@ -112,7 +112,7 @@ def test_deep_agent_consults_the_critic_then_reports_the_gap():
     assert DRAFT in model.seen[0][1].content
 
 
-def test_a_failed_attempt_is_retried_once():
+def test_a_failed_attempt_runs_the_fallback():
     attempts = 0
 
     async def flaky(problem: str, draft: str):
@@ -122,12 +122,12 @@ def test_a_failed_attempt_is_retried_once():
             raise RuntimeError("tool call validation failed")
         return to_analysis(draft, DraftAnalysis(steps=STEPS))
 
-    analysis = asyncio.run(agents._retry_once(flaky)(PROBLEM, DRAFT))
+    analysis = asyncio.run(agents._with_fallback(flaky, flaky, "retrying")(PROBLEM, DRAFT))
     assert attempts == 2
     assert analysis.source == "live"
 
 
-def test_a_second_failure_is_not_retried():
+def test_a_failing_fallback_is_not_retried_again():
     attempts = 0
 
     async def broken(problem: str, draft: str):
@@ -136,7 +136,7 @@ def test_a_second_failure_is_not_retried():
         raise RuntimeError("still failing")
 
     with pytest.raises(RuntimeError):
-        asyncio.run(agents._retry_once(broken)(PROBLEM, DRAFT))
+        asyncio.run(agents._with_fallback(broken, broken, "retrying")(PROBLEM, DRAFT))
     assert attempts == 2
 
 
@@ -155,11 +155,14 @@ def groq_requests(monkeypatch):
     """Capture what would be sent to Groq and answer from a script instead."""
     monkeypatch.setenv("GROQ_API_KEY", "test-key-not-real")
     captured: list[dict[str, Any]] = []
-    replies: list[AIMessage] = []
+    replies: list[AIMessage | Exception] = []
 
     async def fake_agenerate(self, messages, stop=None, run_manager=None, **kwargs):
         captured.append({"messages": messages, **kwargs})
-        return ChatResult(generations=[ChatGeneration(message=replies.pop(0))])
+        reply = replies.pop(0)
+        if isinstance(reply, Exception):
+            raise reply  # stands in for an error answer from the provider
+        return ChatResult(generations=[ChatGeneration(message=reply)])
 
     monkeypatch.setattr(ChatGroq, "_agenerate", fake_agenerate)
     return captured, replies
@@ -188,3 +191,32 @@ def test_direct_workflow_parses_json_from_groq(groq_requests):
     assert analysis.observations[0].issue_type == "unjustified_step"
     assert "tools" not in captured[0]
     assert captured[0]["response_format"]["type"] == "json_schema"
+
+
+def test_deep_agent_falls_back_to_the_direct_workflow(groq_requests):
+    captured, replies = groq_requests
+    # The deep agent's only model call fails the way Groq does when the model
+    # returns no tool call. The direct workflow then answers.
+    replies.append(RuntimeError("Tool choice is required, but model did not call a tool"))
+    replies.append(AIMessage(content=json.dumps({"steps": STEPS, "gap": GAP})))
+
+    settings = Settings(llm_provider="groq", llm_model="openai/gpt-oss-120b", workflow="deep_agent")
+    analysis = asyncio.run(agents.build_analyzer(settings)(PROBLEM, DRAFT))
+
+    assert analysis.observations[0].target == "n3"
+    assert len(captured) == 2
+    assert "tools" in captured[0]  # first attempt: deep agent with tools
+    assert "tools" not in captured[1]  # second attempt: direct, no tools
+    assert captured[1]["response_format"]["type"] == "json_schema"
+
+
+def test_the_direct_workflow_retries_itself_once(groq_requests):
+    captured, replies = groq_requests
+    replies.append(AIMessage(content="this is not json"))
+    replies.append(AIMessage(content=json.dumps({"steps": STEPS, "gap": None})))
+
+    settings = Settings(llm_provider="groq", llm_model="openai/gpt-oss-120b", workflow="direct")
+    analysis = asyncio.run(agents.build_analyzer(settings)(PROBLEM, DRAFT))
+
+    assert analysis.observations == []
+    assert len(captured) == 2

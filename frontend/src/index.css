@@ -27,4 +27,17 @@
     outline: 2px solid var(--color-accent);
     outline-offset: 2px;
   }
+
+  /* Honor the system setting for people who are sensitive to motion. */
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      transition: none !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* Typeset math should match the size of the text around it. */
+  .katex {
+    font-size: 1.05em;
+  }
 }

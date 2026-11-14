@@ -115,7 +115,10 @@ async def main() -> int:
             if unmatched:
                 print(f"         {unmatched} step(s) were not quoted exactly from the draft")
             if found_gap:
-                print(f"         question: {analysis.observations[0].question}")
+                question = analysis.observations[0].question
+                if "\\" in question and "$" not in question:
+                    print("         note: the question has LaTeX without dollar signs")
+                print(f"         question: {question}")
                 if analysis.observations[0].hint:
                     print(f"         hint: {analysis.observations[0].hint}")
             if args.pause:

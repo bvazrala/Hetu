@@ -104,14 +104,19 @@ Then decide whether the draft has a gap. Report at most one, the most important.
 """
 
 _QUESTION = """\
-If there is a gap, write one specific question about that step. The question should make the student
-see what is missing. It must not state the missing argument, name a proof technique, or suggest what
-to try. A direction to try belongs in the hint, not in the question.
+If there is a gap, write exactly one question about that step, in one sentence. The question should
+make the student see what is missing. It must not state the missing argument, name a proof technique,
+or suggest what to try. A direction to try belongs in the hint, not in the question. The hint points
+at something to examine. It must not state the missing fact itself.
+Write any math in the question and the hint as LaTeX between dollar signs, for example
+$n^2 = 2k$ or $\\sqrt{2k}$. Keep the words outside the dollar signs. This applies only to the
+question and the hint. Step text is still copied from the draft unchanged.
 """
 
 _USE_CRITIC = """\
-Before you report a gap, call the `task` tool once with the `critic` subagent. Give it the problem,
-the full draft, and the exact step you doubt. If the critic answers JUSTIFIED, report no gap.
+Before you report a gap, call the `task` tool once with the `critic` subagent. The critic sees only
+what you write in that call. Copy the problem and the complete draft into it, then name the exact step
+you doubt. If the critic answers JUSTIFIED, report no gap.
 """
 
 _SELF_CHECK = """\
@@ -229,25 +234,35 @@ def _direct_analyzer(model: BaseChatModel) -> Analyzer:
     return analyze
 
 
-def _retry_once(analyze: Analyzer) -> Analyzer:
-    """Models occasionally produce a malformed tool call. One more attempt usually succeeds."""
+def _with_fallback(primary: Analyzer, fallback: Analyzer, note: str) -> Analyzer:
+    """Run `primary`. If it raises, log `note` and run `fallback` instead."""
 
-    async def analyze_with_retry(problem: str, draft: str) -> Analysis:
+    async def analyze(problem: str, draft: str) -> Analysis:
         try:
-            return await analyze(problem, draft)
+            return await primary(problem, draft)
         except Exception as error:
-            logger.warning("retrying after %s: %s", type(error).__name__, str(error)[:200])
-            return await analyze(problem, draft)
+            logger.warning("%s after %s: %s", note, type(error).__name__, str(error)[:200])
+            return await fallback(problem, draft)
 
-    return analyze_with_retry
+    return analyze
 
 
 def build_analyzer(settings: Settings) -> Analyzer:
     """Build the configured workflow. Raises InferenceNotConfigured if no model is set."""
     model = build_chat_model(settings)
+
+    # The direct workflow retries itself once. Its occasional failure is a
+    # reply that does not parse, and a second attempt usually does.
+    direct = _direct_analyzer(model)
+    direct = _with_fallback(direct, direct, "retrying the direct workflow")
     if settings.workflow == "direct":
-        return _retry_once(_direct_analyzer(model))
-    return _retry_once(_deep_agent_analyzer(model, profile_key=model_spec(settings)))
+        return direct
+
+    # The deep agent must answer through a tool call, and the model sometimes
+    # returns none. At temperature 0 an identical retry tends to fail the same
+    # way, so the safety net is the direct workflow, which uses no tool calls.
+    deep_agent = _deep_agent_analyzer(model, profile_key=model_spec(settings))
+    return _with_fallback(deep_agent, direct, "falling back to the direct workflow")
 
 
 # ---------------------------------------------------------------------------

@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from 'react'
 import { MAX_DRAFT_CHARS, MAX_PROBLEM_CHARS } from '../../lib/api'
 
 interface Props {
@@ -13,7 +14,7 @@ interface Props {
 
 const fieldClass =
   'w-full rounded-md border border-rule bg-surface px-4 py-3 font-serif text-lg leading-relaxed ' +
-  'placeholder:text-muted/70 focus-visible:border-accent'
+  'placeholder:text-muted focus-visible:border-accent'
 
 export function FreeformEditor({
   problem,
@@ -27,8 +28,16 @@ export function FreeformEditor({
 }: Props) {
   const canInspect = draft.trim().length > 0 && !busy
 
+  // Ctrl+Enter, or Command+Enter on a Mac, inspects without leaving the keyboard.
+  function inspectOnShortcut(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && canInspect) {
+      event.preventDefault()
+      onInspect()
+    }
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" aria-busy={busy}>
       <div>
         <label htmlFor="problem" className="mb-2 block text-sm font-medium text-muted">
           Problem
@@ -39,6 +48,7 @@ export function FreeformEditor({
           maxLength={MAX_PROBLEM_CHARS}
           value={problem}
           onChange={(e) => onProblemChange(e.target.value)}
+          onKeyDown={inspectOnShortcut}
           placeholder="What are you trying to show?"
           className={fieldClass + ' resize-y'}
         />
@@ -54,6 +64,7 @@ export function FreeformEditor({
           maxLength={MAX_DRAFT_CHARS}
           value={draft}
           onChange={(e) => onDraftChange(e.target.value)}
+          onKeyDown={inspectOnShortcut}
           placeholder="Write it your way. Rough steps are fine."
           className={fieldClass + ' min-h-48 resize-y'}
         />
@@ -65,6 +76,7 @@ export function FreeformEditor({
           onClick={onInspect}
           disabled={!canInspect}
           aria-describedby="inspect-note"
+          aria-keyshortcuts="Control+Enter Meta+Enter"
           className="rounded-md bg-accent px-5 py-2.5 font-medium text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-rule disabled:text-muted"
         >
           {busy ? 'Inspecting…' : 'Inspect reasoning'}
@@ -90,7 +102,8 @@ export function FreeformEditor({
           </p>
         ) : (
           <p className="text-muted">
-            Hetu asks a model to read your draft and question one step. It does not write the proof.
+            Hetu asks a model to read your draft and question one step. It does not write the proof. Shortcut: Ctrl
+            or ⌘ with Enter.
           </p>
         )}
       </div>

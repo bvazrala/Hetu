@@ -1,0 +1,47 @@
+# Render Blueprint: one API service and one static site.
+# In the Render dashboard choose New > Blueprint and select this repository.
+# Values marked "sync: false" are asked for in the dashboard and never stored here.
+
+services:
+  # --- Backend: FastAPI ----------------------------------------------------
+  - type: web
+    name: hetu-api
+    runtime: python
+    # Starter is a paid plan that stays awake. Use "free" to avoid the charge;
+    # a free instance sleeps when idle and takes about a minute to wake.
+    plan: starter
+    rootDir: backend
+    buildCommand: uv sync --frozen --no-dev
+    startCommand: .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
+      - key: HETU_LLM_PROVIDER
+        value: groq
+      - key: HETU_LLM_MODEL
+        value: openai/gpt-oss-120b
+      - key: HETU_LLM_TEMPERATURE
+        value: 0
+      - key: HETU_WORKFLOW
+        value: deep_agent
+      - key: GROQ_API_KEY
+        sync: false
+      # The public URL of the static site below, with no trailing slash.
+      - key: HETU_CORS_ORIGINS
+        sync: false
+
+  # --- Frontend: static files built by Vite --------------------------------
+  # No rootDir here on purpose. The build imports ../examples, and Render
+  # hides files outside a service's root directory.
+  - type: web
+    name: hetu
+    runtime: static
+    buildCommand: cd frontend && npm ci && npm run build
+    staticPublishPath: frontend/dist
+    envVars:
+      - key: NODE_VERSION
+        value: 22.12.0
+      # The public URL of hetu-api above, with no trailing slash.
+      - key: VITE_API_BASE_URL
+        sync: false

@@ -30,6 +30,7 @@ export class AnalyzeError extends Error {}
 
 const STATUS_MESSAGES: Record<number, string> = {
   422: 'The draft is empty or too long to analyze.',
+  429: 'Too many requests. Wait a minute and try again.',
   503: 'Live analysis is not available right now.',
   504: 'The analysis took too long.',
 }
