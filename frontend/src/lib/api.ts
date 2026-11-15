@@ -59,12 +59,22 @@ const CHAT_STATUS_MESSAGES: Record<number, string> = {
   504: 'Hetu took too long to answer.',
 }
 
+/** Supplies a signed-in user's token, so their requests count against their own account. */
+let tokenProvider: () => Promise<string | null> = async () => null
+
+export function setTokenProvider(provider: () => Promise<string | null>) {
+  tokenProvider = provider
+}
+
 async function post(path: string, body: unknown, failures: Record<number, string>, fallback: string): Promise<unknown> {
   let response: Response
+  const token = await tokenProvider().catch(() => null)
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (token) headers.Authorization = `Bearer ${token}`
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     })
@@ -76,6 +86,14 @@ async function post(path: string, body: unknown, failures: Record<number, string
   }
   // Any HTTP answer, including an error status, means the server is there.
   reportReachability(true)
+  if (response.status === 429) {
+    // The server says which limit was reached: per minute, per day, or overall.
+    const detail = await response
+      .json()
+      .then((body: unknown) => (body as { detail?: unknown }).detail)
+      .catch(() => null)
+    throw new AnalyzeError(typeof detail === 'string' ? detail : failures[429])
+  }
   if (!response.ok) throw new AnalyzeError(failures[response.status] ?? fallback)
   return response.json()
 }

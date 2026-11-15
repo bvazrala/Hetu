@@ -9,6 +9,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.agents import Analyzer, build_analyzer
+from app.auth import TokenVerifier, bearer_token
 from app.config import get_settings
 from app.limits import RequestLimiter, client_address
 from app.llm import InferenceNotConfigured
@@ -26,21 +27,40 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
     allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 
 limiter = RequestLimiter(settings.rate_limit_per_minute, settings.daily_analysis_limit)
 
 
+@lru_cache
+def get_verifier() -> TokenVerifier | None:
+    """The Neon Auth token verifier, or None when accounts are not configured."""
+    url = get_settings().neon_auth_url
+    return TokenVerifier(url) if url else None
+
+
 def enforce_limits(request: Request) -> None:
-    """Dependency that answers 429 when a client or the whole service is over its limit."""
-    client = client_address(
-        peer=request.client.host if request.client else "unknown",
-        forwarded_for=request.headers.get("x-forwarded-for", ""),
-        trusted_proxy_hops=settings.trusted_proxy_hops,
-    )
-    message = limiter.check(client)
+    """Dependency that answers 429 when a client or the whole service is over its limit.
+
+    A signed-in user is counted by the account in their verified token. Anyone
+    else, including a request with a token that does not verify, is counted
+    by address as a guest.
+    """
+    verifier = get_verifier()
+    token = bearer_token(request.headers.get("authorization", ""))
+    user = verifier.user_id(token) if verifier and token else None
+    if user:
+        client, per_day = f"user:{user}", settings.daily_limit_per_user
+    else:
+        address = client_address(
+            peer=request.client.host if request.client else "unknown",
+            forwarded_for=request.headers.get("x-forwarded-for", ""),
+            trusted_proxy_hops=settings.trusted_proxy_hops,
+        )
+        client, per_day = f"guest:{address}", settings.daily_limit_per_guest
+    message = limiter.check(client, per_day)
     if message:
         raise HTTPException(429, message, headers={"Retry-After": "60"})
 

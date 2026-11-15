@@ -113,6 +113,7 @@ MAX_MESSAGE_CHARS = 6000
 MAX_MESSAGES = 24
 MAX_NOTE_CHARS = 200
 MAX_NOTES = 8
+MAX_DISMISSED = 24
 
 Specialist = Literal["mathematics", "science", "programming", "humanities", "logic"]
 
@@ -128,8 +129,16 @@ Action = Literal[
     "practice",
     "check_understanding",
     "answer_directly",
+    "give_hint",
+    "let_student_try",
     "reconsider",
 ]
+
+# The kind of help the student asked for with one message. None lets Hetu decide.
+Assist = Literal["explain", "hint", "check", "example", "try", "challenge"]
+
+# What the student said they came to do when they started the session.
+Intent = Literal["understand", "solve", "examine"]
 
 
 class ChatMessage(BaseModel):
@@ -146,11 +155,19 @@ class LearningState(BaseModel):
     # Only what the student has shown in their own messages, not what was explained to them.
     understood: list[str] = Field(default_factory=list, description="What the student has demonstrated.")
     misconceptions: list[str] = Field(default_factory=list, description="Possible mix-ups. Uncertain.")
+    open_questions: list[str] = Field(default_factory=list, description="Questions the student is still exploring.")
+    # Notes the student removed. Hetu does not add them back.
+    dismissed: list[str] = Field(default_factory=list)
 
-    @field_validator("concepts", "understood", "misconceptions")
+    @field_validator("concepts", "understood", "misconceptions", "open_questions")
     @classmethod
     def _keep_notes_short(cls, notes: list[str]) -> list[str]:
         return [note.strip()[:MAX_NOTE_CHARS] for note in notes if note.strip()][:MAX_NOTES]
+
+    @field_validator("dismissed")
+    @classmethod
+    def _keep_recent_dismissals(cls, notes: list[str]) -> list[str]:
+        return [note.strip()[:MAX_NOTE_CHARS] for note in notes if note.strip()][-MAX_DISMISSED:]
 
 
 class WorkspaceContext(BaseModel):
@@ -174,6 +191,8 @@ class ChatRequest(BaseModel):
     learning_state: LearningState | None = None
     workspace: WorkspaceContext | None = None
     proof_context: ProofContext | None = None
+    assist: Assist | None = None
+    intent: Intent | None = None
 
     @field_validator("messages")
     @classmethod

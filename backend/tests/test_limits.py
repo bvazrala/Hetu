@@ -104,3 +104,9 @@ def test_a_forged_forwarded_header_does_not_reset_the_per_client_limit(monkeypat
 
     assert first.status_code == 502
     assert second.status_code == 429
+
+
+def test_one_client_cannot_use_up_the_shared_daily_limit():
+    limiter = RequestLimiter(per_minute=100, per_day=10, clock=lambda: 1000.0)
+    assert [limiter.check("a", client_per_day=3) for _ in range(4)][-1] is not None
+    assert limiter.check("b", client_per_day=3) is None

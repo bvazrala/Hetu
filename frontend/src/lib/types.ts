@@ -82,7 +82,17 @@ export interface LearningState {
   understood: string[]
   /** Possible mix-ups. Uncertain. */
   misconceptions: string[]
+  /** Questions the student is still exploring. */
+  open_questions: string[]
+  /** Notes the student removed. Hetu does not add them back. */
+  dismissed: string[]
 }
+
+/** The kind of help the student asks for with one message. */
+export type Assist = 'explain' | 'hint' | 'check' | 'example' | 'try' | 'challenge'
+
+/** What the student came to do when the session started. */
+export type Intent = 'understand' | 'solve' | 'examine'
 
 export interface WorkspaceContext {
   problem: string
@@ -102,6 +112,8 @@ export interface ChatRequest {
   learning_state: LearningState | null
   workspace?: WorkspaceContext
   proof_context?: ProofContext
+  assist?: Assist
+  intent?: Intent
 }
 
 /** A proof analysis together with the exact text it was made for. */

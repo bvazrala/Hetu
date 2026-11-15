@@ -1,26 +1,26 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { BackendStatus } from '../../components/BackendStatus'
 import { Markdown } from '../../components/Markdown'
 import { MAX_MESSAGE_CHARS } from '../../lib/api'
-import type { LearningState, ProofInspection, Specialist, WorkspaceContext } from '../../lib/types'
+import { graphIsUseful } from '../../lib/graph'
+import type { Assist, ProofInspection, Specialist, WorkspaceContext } from '../../lib/types'
+import { SessionNotes } from './SessionNotes'
 import type { ConversationState, Turn } from './useConversation'
+import { STARTS } from './starts'
+import { Welcome } from './Welcome'
 
 interface Props {
   conversation: ConversationState
-  /** The workspace draft, offered to the student as something they can share. */
+  /** The workspace draft, offered to the student as something they can include. */
   workspace: WorkspaceContext | null
-  /** Opens a proof inspection from the conversation in the Structured view. */
+  /** Opens a proof inspection from the conversation in the workspace. */
   onOpenInspection: (inspection: ProofInspection) => void
+  onOpenWorkspace: () => void
+  /** Messages about saving and accounts, shown above the conversation. */
+  notices?: ReactNode[]
+  /** Where this conversation is kept, in a few words. */
+  saveNote?: string
 }
-
-// One starter per kind of help, so a first visit shows the range without a tour.
-const STARTERS = [
-  "I don't understand inheritance in Python.",
-  'Why does the sky look blue?',
-  'Can you help me understand integration?',
-  'Here is my proof that if n² is even, then n is even: Assume n² = 2k. Then n = √(2k), so n is even. Is my reasoning correct?',
-  'Everyone I know who studies with music gets better grades, so studying with music makes everyone perform better.',
-  "I'm writing about whether the Industrial Revolution improved people's lives. I think it did, but I'm not sure how to support that.",
-]
 
 const SPECIALIST_LABELS: Record<Specialist, string> = {
   mathematics: 'Mathematics',
@@ -30,13 +30,50 @@ const SPECIALIST_LABELS: Record<Specialist, string> = {
   logic: 'Logic',
 }
 
-const outlineButton =
-  'rounded-md border border-accent px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent-soft ' +
-  'disabled:cursor-not-allowed disabled:opacity-50'
+/** The kinds of help a student can ask for, in the order the composer lists them. */
+const ASSIST_OPTIONS: { value: Assist; label: string; note: string }[] = [
+  { value: 'explain', label: 'Explain this', note: 'Asked for an explanation' },
+  { value: 'hint', label: 'Give me a hint', note: 'Asked for a hint' },
+  { value: 'check', label: 'Check my reasoning', note: 'Asked for a check of your reasoning' },
+  { value: 'example', label: 'Show an example', note: 'Asked for an example' },
+  { value: 'try', label: 'Let me try', note: 'Wanted to try it yourself' },
+  { value: 'challenge', label: 'Challenge my assumption', note: 'Asked to be challenged' },
+]
 
-export function Conversation({ conversation, workspace, onOpenInspection }: Props) {
-  const { turns, notes, input, setInput, busy, error, send, retry, newSession } = conversation
-  const [shareWorkspace, setShareWorkspace] = useState(false)
+// One-tap follow-ups under Hetu's latest reply. Each sends a short message the student can see.
+const FOLLOW_UPS: Partial<Record<Assist, string>> = {
+  example: 'Show me an example.',
+  try: "I'd like to try it myself.",
+  hint: 'Can I have a hint?',
+  explain: 'Can you explain that a different way?',
+}
+
+/** Two follow-ups that fit what Hetu just did, so the options stay few. */
+function followUpsFor(action: string | undefined): Assist[] {
+  switch (action) {
+    case 'demonstrate':
+      return ['try', 'explain']
+    case 'give_hint':
+    case 'let_student_try':
+    case 'practice':
+    case 'check_understanding':
+    case 'inspect_reasoning':
+    case 'challenge_assumption':
+      return ['hint', 'explain']
+    case 'teach':
+    case 'explain':
+    case 'explore':
+    case 'answer_directly':
+    case 'correct_misconception':
+    case 'reconsider':
+      return ['example', 'try']
+    default:
+      return []
+  }
+}
+
+export function Conversation({ conversation, workspace, onOpenInspection, onOpenWorkspace, notices = [], saveNote }: Props) {
+  const { turns, notes, intent, input, setInput, assist, setAssist, busy, error, loading } = conversation
   const end = useRef<HTMLDivElement>(null)
   const field = useRef<HTMLTextAreaElement>(null)
 
@@ -45,10 +82,17 @@ export function Conversation({ conversation, workspace, onOpenInspection }: Prop
     if (turns.length > 0 || busy) end.current?.scrollIntoView?.({ block: 'end' })
   }, [turns.length, busy])
 
+  // Something outside the composer asked for the cursor, such as "Ask about the selection".
+  useEffect(() => {
+    const element = field.current
+    if (conversation.composerFocus === 0 || !element) return
+    element.focus()
+    element.setSelectionRange(element.value.length, element.value.length)
+  }, [conversation.composerFocus])
+
   function submit() {
     if (busy || input.trim() === '') return
-    send(input, shareWorkspace && workspace ? workspace : undefined)
-    setShareWorkspace(false)
+    conversation.send(input, { workspace: conversation.attachWorkspace && workspace ? workspace : undefined })
   }
 
   function submitOnEnter(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -60,119 +104,178 @@ export function Conversation({ conversation, workspace, onOpenInspection }: Prop
     }
   }
 
+  const latest = turns.at(-1)
+  const followUps = !busy && !error && latest?.role === 'hetu' ? followUpsFor(latest.action) : []
+  const placeholder = STARTS.find((start) => start.intent === intent)?.placeholder ?? 'Ask a question, or share what you are working on'
+
   return (
-    <div className="flex flex-1 flex-col">
-      {turns.length === 0 ? (
-        <div className="flex-1 py-6">
-          <h2 className="font-serif text-3xl leading-tight font-semibold">What are you trying to understand?</h2>
-          <p className="mt-3 max-w-xl text-muted">
-            Ask about any subject, or bring your own reasoning. Hetu explains, shows examples, and questions an
-            argument when that is what helps.
-          </p>
-          <h3 className="mt-8 mb-3 text-sm font-medium text-muted">Or start from one of these</h3>
-          <ul role="list" className="grid gap-3 sm:grid-cols-2">
-            {STARTERS.map((starter) => (
-              <li key={starter}>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => send(starter)}
-                  className="h-full w-full rounded-md border border-rule bg-surface px-4 py-3 text-left font-serif leading-snug transition-colors hover:border-accent disabled:opacity-50"
-                >
-                  {starter}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : (
-        <div className="flex-1">
-          <h2 className="sr-only">Conversation</h2>
-          <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-            <SessionNotes notes={notes} />
-            <button type="button" className={outlineButton + ' ml-auto'} onClick={newSession}>
-              New session
-            </button>
-          </div>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+        <div className="mx-auto w-full max-w-3xl px-5 pt-6 pb-8 sm:px-8">
+          {loading ? (
+            <p aria-live="polite" className="py-10 text-muted">
+              Opening the conversation…
+            </p>
+          ) : turns.length === 0 && error ? (
+            <p role="alert" className="border-l-2 border-flag py-2 pl-3">
+              {error}
+            </p>
+          ) : turns.length === 0 ? (
+            <Welcome intent={intent} onChoose={conversation.chooseIntent} onOpenWorkspace={onOpenWorkspace} />
+          ) : (
+            <>
+              <h2 className="sr-only">Conversation</h2>
+              <div className="mb-6">
+                <SessionNotes notes={notes} onRemove={conversation.removeNote} />
+              </div>
 
-          <div role="log" aria-label="Conversation" className="space-y-7">
-            {turns.map((turn) => (
-              <Message
-                key={turn.id}
-                turn={turn}
-                workspace={workspace}
-                onOpenInspection={onOpenInspection}
-              />
-            ))}
-          </div>
+              <div role="log" aria-label="Conversation" className="space-y-8">
+                {turns.map((turn) => (
+                  <Message key={turn.id} turn={turn} workspace={workspace} onOpenInspection={onOpenInspection} />
+                ))}
+              </div>
 
-          <div aria-live="polite" className="mt-6 min-h-6 text-sm">
-            {busy && <p className="text-muted">Hetu is thinking…</p>}
-            {error && !busy && (
-              <p className="flex flex-wrap items-center gap-3 border-l-2 border-flag pl-3">
-                <span>
-                  <span className="font-medium">{error}</span>{' '}
-                  <span className="text-muted">Your message is still here.</span>
-                </span>
-                <button type="button" className={outlineButton} onClick={retry}>
-                  Try again
-                </button>
-              </p>
-            )}
-          </div>
-        </div>
-      )}
+              {followUps.length > 0 && (
+                <div role="group" aria-label="Next step" className="mt-5 flex flex-wrap gap-2">
+                  {followUps.map((kind) => (
+                    <button
+                      key={kind}
+                      type="button"
+                      className="btn btn-secondary btn-small rounded-full"
+                      onClick={() => conversation.send(FOLLOW_UPS[kind]!, { assist: kind })}
+                    >
+                      {ASSIST_OPTIONS.find((option) => option.value === kind)!.label}
+                    </button>
+                  ))}
+                </div>
+              )}
 
-      <div ref={end} />
-
-      <form
-        className="sticky bottom-0 -mx-1 mt-6 border-t border-rule bg-paper px-1 pt-4 pb-3"
-        onSubmit={(event) => {
-          event.preventDefault()
-          submit()
-        }}
-      >
-        <label htmlFor="message" className="sr-only">
-          Message Hetu
-        </label>
-        <div className="flex items-end gap-3">
-          <textarea
-            id="message"
-            ref={field}
-            rows={2}
-            maxLength={MAX_MESSAGE_CHARS}
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            onKeyDown={submitOnEnter}
-            placeholder="Ask a question, or share what you are working on"
-            aria-describedby="message-hint"
-            className="max-h-60 min-h-14 w-full [field-sizing:content] resize-none rounded-md border border-rule bg-surface px-4 py-3 font-serif text-lg leading-relaxed placeholder:text-muted focus-visible:border-accent"
-          />
-          <button
-            type="submit"
-            disabled={busy || input.trim() === ''}
-            className="rounded-md bg-accent px-5 py-3 font-medium text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-rule disabled:text-muted"
-          >
-            Send
-          </button>
-        </div>
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-muted">
-          <span id="message-hint">Enter to send. Shift with Enter for a new line.</span>
-          {workspace && (
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={shareWorkspace}
-                onChange={(event) => setShareWorkspace(event.target.checked)}
-                className="accent-accent"
-              />
-              Share my workspace draft with this message
-            </label>
+              <div aria-live="polite" className="mt-6 min-h-6 text-sm">
+                {busy && (
+                  <p className="flex items-center gap-2 text-muted">
+                    <span aria-hidden="true" className="size-2 rounded-full bg-accent motion-safe:animate-pulse" />
+                    Hetu is thinking…
+                  </p>
+                )}
+                {error && !busy && (
+                  <div className="flex flex-wrap items-center gap-3 rounded-md border border-flag/40 bg-flag-soft px-4 py-3">
+                    <p>
+                      <span className="font-medium">{error}</span>{' '}
+                      <span className="text-muted">Your message is still here.</span>
+                    </p>
+                    <button type="button" className="btn btn-secondary btn-small" onClick={conversation.retry}>
+                      Try again
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
           )}
+          <div ref={end} />
         </div>
-      </form>
+      </div>
+
+      <div className="border-t border-rule bg-paper">
+        {/* Notices sit by the composer, so they are seen however far the conversation has scrolled. */}
+        {notices.length > 0 && (
+          <div className="mx-auto max-h-[40vh] w-full max-w-3xl space-y-2 overflow-y-auto px-5 pt-3 sm:px-8">{notices}</div>
+        )}
+        <form
+          className="mx-auto w-full max-w-3xl px-5 pt-3 pb-3 sm:px-8"
+          onSubmit={(event) => {
+            event.preventDefault()
+            submit()
+          }}
+        >
+          <label htmlFor="message" className="sr-only">
+            Message Hetu
+          </label>
+          <div className="rounded-lg border border-rule bg-surface transition-colors focus-within:border-accent focus-within:shadow-[0_0_0_1px_var(--color-accent)]">
+            <textarea
+              id="message"
+              ref={field}
+              rows={2}
+              maxLength={MAX_MESSAGE_CHARS}
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={submitOnEnter}
+              placeholder={placeholder}
+              aria-describedby="message-hint"
+              className="block max-h-60 min-h-14 w-full [field-sizing:content] resize-none bg-transparent px-4 pt-3 pb-1 font-serif text-lg leading-relaxed outline-none placeholder:text-muted focus-visible:outline-none"
+            />
+            <div className="flex flex-wrap items-center gap-2 px-2 pb-2">
+              <label className="flex items-center gap-1.5 rounded-md px-2 text-sm text-muted">
+                <span>Help</span>
+                <select
+                  value={assist ?? ''}
+                  onChange={(event) => setAssist((event.target.value || null) as Assist | null)}
+                  className="rounded-md border border-rule bg-paper py-1 pr-1 pl-2 text-sm text-ink"
+                >
+                  <option value="">Let Hetu decide</option>
+                  {ASSIST_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {workspace && (
+                <label className="flex items-center gap-2 px-2 text-sm text-muted">
+                  <input
+                    type="checkbox"
+                    checked={conversation.attachWorkspace}
+                    onChange={(event) => conversation.setAttachWorkspace(event.target.checked)}
+                    className="size-4 accent-accent"
+                  />
+                  Include my workspace
+                </label>
+              )}
+              <button type="submit" disabled={busy || loading || input.trim() === ''} className="btn btn-primary ml-auto">
+                Send
+              </button>
+            </div>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-muted">
+            <span id="message-hint">Enter to send. Shift with Enter for a new line.</span>
+            <span className="flex flex-wrap items-center gap-x-3">
+              {saveNote && <span>{saveNote}</span>}
+              <span>Hetu can be wrong.</span>
+              <BackendStatus />
+            </span>
+          </div>
+        </form>
+      </div>
     </div>
   )
+}
+
+/** The student's words as typed. Lines starting with "> " are shown as a quotation of their work. */
+function StudentText({ text }: { text: string }) {
+  const blocks: ReactNode[] = []
+  let quote: string[] = []
+  let plain: string[] = []
+  const flush = () => {
+    if (quote.length > 0) {
+      blocks.push(
+        <blockquote key={blocks.length} className="border-l-2 border-rule pl-3 text-muted">
+          {quote.join('\n')}
+        </blockquote>,
+      )
+      quote = []
+    }
+    if (plain.length > 0) {
+      blocks.push(<p key={blocks.length}>{plain.join('\n').trim()}</p>)
+      plain = []
+    }
+  }
+  for (const line of text.split('\n')) {
+    const quoted = line.startsWith('> ') || line === '>'
+    if (quoted !== quote.length > 0 && (quote.length > 0 || plain.length > 0)) flush()
+    if (quoted) quote.push(line.slice(2))
+    else plain.push(line)
+  }
+  flush()
+  return <div className="mt-1 space-y-2 font-serif text-lg leading-relaxed whitespace-pre-wrap">{blocks}</div>
 }
 
 function Message({
@@ -185,19 +288,26 @@ function Message({
   onOpenInspection: (inspection: ProofInspection) => void
 }) {
   if (turn.role === 'student') {
+    const asked = ASSIST_OPTIONS.find((option) => option.value === turn.assist)
     return (
-      <article aria-label="You said" className="rounded-md border border-rule bg-surface px-4 py-3">
-        <h3 className="text-xs font-medium tracking-wide text-muted uppercase">You</h3>
-        <p className="mt-1 font-serif text-lg leading-relaxed whitespace-pre-wrap">{turn.content}</p>
-        {turn.workspace && <p className="mt-2 text-xs text-muted">Sent with your workspace draft.</p>}
+      <article aria-label="You said" className="ml-auto w-fit max-w-[92%] rounded-lg border border-rule bg-surface px-4 py-3 sm:max-w-[85%]">
+        <h3 className="eyebrow">You</h3>
+        <StudentText text={turn.content} />
+        {(asked || turn.workspace || turn.workspaceIncluded) && (
+          <p className="mt-2 text-xs text-muted">
+            {[asked?.note, (turn.workspace || turn.workspaceIncluded) && 'Workspace included']
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+        )}
       </article>
     )
   }
 
   const specialists = (turn.specialists ?? []).map((name) => SPECIALIST_LABELS[name]).filter(Boolean)
   return (
-    <article aria-label="Hetu said" className="px-1">
-      <h3 className="mb-1 text-xs font-medium tracking-wide text-accent uppercase">Hetu</h3>
+    <article aria-label="Hetu said">
+      <h3 className="eyebrow mb-1 text-accent">Hetu</h3>
       <Markdown text={turn.content} />
 
       {(turn.checks ?? []).length > 0 && (
@@ -211,16 +321,14 @@ function Message({
         </div>
       )}
 
-      {turn.inspection && (
-        <InspectionCard inspection={turn.inspection} workspace={workspace} onOpen={onOpenInspection} />
-      )}
+      {turn.inspection && <InspectionCard inspection={turn.inspection} workspace={workspace} onOpen={onOpenInspection} />}
 
       {specialists.length > 0 && <p className="mt-3 text-xs text-muted">{specialists.join(' · ')}</p>}
     </article>
   )
 }
 
-/** Offers the reasoning graph for a proof that Hetu inspected in the conversation. */
+/** Offers the step by step view for a proof that Hetu inspected in the conversation. */
 function InspectionCard({
   inspection,
   workspace,
@@ -233,13 +341,14 @@ function InspectionCard({
   const [confirming, setConfirming] = useState(false)
   const steps = inspection.analysis.nodes.length
   const questions = inspection.analysis.observations.length
-  // Opening the graph puts this proof into the workspace. Other work there is never replaced silently.
+  const label = graphIsUseful(inspection.analysis) ? 'Open reasoning graph' : 'Open the steps'
+  // Opening the steps puts this proof into the workspace. Other work there is never replaced silently.
   const wouldReplace = workspace !== null && workspace.draft !== inspection.draft
 
   return (
     <div className="mt-4 rounded-md border border-rule bg-surface px-4 py-3 text-sm">
       <p>
-        <span className="font-medium">Reasoning graph.</span>{' '}
+        <span className="font-medium">Your argument, step by step.</span>{' '}
         <span className="text-muted">
           {steps} {steps === 1 ? 'step' : 'steps'}, {questions === 0 ? 'no question' : 'one question'}. See how the
           steps connect, revise a step, or challenge the question.
@@ -248,54 +357,22 @@ function InspectionCard({
       {confirming ? (
         <p className="mt-3 flex flex-wrap items-center gap-3">
           <span>This replaces the text in your workspace.</span>
-          <button type="button" className={outlineButton} onClick={() => onOpen(inspection)}>
+          <button type="button" className="btn btn-secondary btn-small" onClick={() => onOpen(inspection)}>
             Replace and open
           </button>
-          <button type="button" className={outlineButton} onClick={() => setConfirming(false)}>
+          <button type="button" className="btn btn-quiet btn-small" onClick={() => setConfirming(false)}>
             Cancel
           </button>
         </p>
       ) : (
         <button
           type="button"
-          className={outlineButton + ' mt-3'}
+          className="btn btn-secondary btn-small mt-3"
           onClick={() => (wouldReplace ? setConfirming(true) : onOpen(inspection))}
         >
-          Open reasoning graph
+          {label}
         </button>
       )}
     </div>
-  )
-}
-
-/** Hetu's running notes on the session, shown so the student can see and judge them. */
-function SessionNotes({ notes }: { notes: LearningState | null }) {
-  if (!notes) return null
-  const rows: [string, string][] = [
-    ['Topic', notes.topic ?? ''],
-    ['Goal', notes.goal ?? ''],
-    ['Covered so far', notes.concepts.join(', ')],
-    ['You have shown', notes.understood.join(', ')],
-    ['Possible mix-ups', notes.misconceptions.join(', ')],
-  ]
-  const filled = rows.filter(([, value]) => value !== '')
-  if (filled.length === 0) return null
-
-  return (
-    <details className="max-w-xl text-sm">
-      <summary className="w-fit cursor-pointer font-medium text-muted">Session notes</summary>
-      <dl className="mt-2 space-y-1">
-        {filled.map(([label, value]) => (
-          <div key={label} className="flex gap-2">
-            <dt className="shrink-0 font-medium">{label}:</dt>
-            <dd className="text-muted">{value}</dd>
-          </div>
-        ))}
-      </dl>
-      <p className="mt-2 text-xs text-muted">
-        Hetu keeps these rough notes to follow the conversation. They are guesses from this session, not a measure
-        of what you know.
-      </p>
-    </details>
   )
 }

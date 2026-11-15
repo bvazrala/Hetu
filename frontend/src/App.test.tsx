@@ -12,17 +12,17 @@ vi.mock('./lib/api', async (original) => ({
 }))
 const analyze = vi.mocked(analyzeDraft)
 
-const draftField = () => screen.getByLabelText<HTMLTextAreaElement>('Your reasoning')
+const draftField = () => screen.getByLabelText<HTMLTextAreaElement>('Your work')
 
-async function openFreeform() {
-  await userEvent.click(screen.getByRole('button', { name: 'Freeform' }))
+async function openWorkspace() {
+  await userEvent.click(screen.getByRole('button', { name: 'Workspace' }))
 }
 
 async function inspectTheExample() {
   render(<App />)
-  await openFreeform()
+  await openWorkspace()
   await userEvent.click(screen.getByRole('button', { name: 'Try an example' }))
-  await userEvent.click(screen.getByRole('button', { name: 'Inspect reasoning' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Map the steps' }))
   await screen.findByRole('heading', { name: 'Analysis' })
 }
 
@@ -54,7 +54,7 @@ describe('the whole loop', () => {
 
     // Typing replaces the selected step, as it would for a student.
     await userEvent.keyboard('so n is even because an odd n has an odd square.')
-    await userEvent.click(screen.getByRole('button', { name: 'Inspect reasoning' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Map the steps' }))
 
     expect(await screen.findByText('Hetu has no question about this draft.')).toBeInTheDocument()
     expect(analyze.mock.calls[1][1]).toContain('an odd n has an odd square.')
@@ -76,21 +76,16 @@ describe('the whole loop', () => {
     expect(within(exchange).getByText('It is obvious.')).toBeInTheDocument()
     expect(within(exchange).getByText('The draft still does not say why.')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Freeform' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Draft' }))
     expect(draftField().value).toBe(DRAFT)
   })
 
-  it('restores saved work after a reload and can clear it', async () => {
-    const first = render(<App />)
-    await openFreeform()
-    await userEvent.type(draftField(), 'A draft worth keeping.')
-    // The save is delayed, so wait for it before "reloading".
-    await vi.waitFor(() => expect(window.localStorage.getItem('hetu.workspace.v1')).toContain('worth keeping'))
-    first.unmount()
-
+  it('shows a draft kept by an earlier version, and clearing removes it after asking', async () => {
+    window.localStorage.setItem('hetu.workspace.v1', JSON.stringify({ problem: '', draft: 'A draft worth keeping.' }))
     render(<App />)
-    await openFreeform()
+    await openWorkspace()
     expect(draftField().value).toBe('A draft worth keeping.')
+    expect(screen.getByText('Not saved. Stays in this tab.')).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Clear workspace' }))
     expect(draftField().value).toBe('A draft worth keeping.')

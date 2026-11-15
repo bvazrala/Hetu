@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AnalyzeError, analyzeDraft } from '../../lib/api'
 import { saveWorkspace } from '../../lib/storage'
@@ -27,7 +27,7 @@ function type(workspace: () => ReturnType<typeof useWorkspace>, problem: string,
 beforeEach(() => analyze.mockReset())
 
 describe('inspecting a draft', () => {
-  it('shows the analysis and switches to the Structured view', async () => {
+  it('shows the analysis and opens the Structure view', async () => {
     analyze.mockResolvedValue(LIVE_ANALYSIS)
     const { workspace } = setup()
     type(workspace, PROBLEM, DRAFT)
@@ -35,7 +35,7 @@ describe('inspecting a draft', () => {
     await act(() => workspace().inspect())
 
     expect(analyze).toHaveBeenCalledWith(PROBLEM, DRAFT)
-    expect(workspace().mode).toBe('structured')
+    expect(workspace().panel).toBe('structure')
     expect(workspace().inspection?.analysis).toBe(LIVE_ANALYSIS)
     expect(workspace().stale).toBe(false)
   })
@@ -49,7 +49,7 @@ describe('inspecting a draft', () => {
 
     expect(workspace().error).toBe('The analysis took too long.')
     expect(workspace().draft).toBe('My own draft.')
-    expect(workspace().mode).not.toBe('structured')
+    expect(workspace().panel).not.toBe('structure')
     expect(workspace().inspection).toBeNull()
   })
 
@@ -79,7 +79,7 @@ describe('a response that arrives after the draft changed', () => {
     act(() => workspace().setDraft(DRAFT + ' Also, n is positive.'))
     await act(async () => request.resolve(LIVE_ANALYSIS))
 
-    expect(workspace().mode).not.toBe('structured')
+    expect(workspace().panel).not.toBe('structure')
     expect(workspace().inspection).toBeNull()
     expect(workspace().stale).toBe(false)
     expect(workspace().notice).toBe(DISCARDED_NOTICE)
@@ -150,15 +150,19 @@ describe('saving work in the browser', () => {
     expect(workspace().draft).toBe('')
   })
 
-  it('saves after a pause, not on every keystroke', async () => {
+  it('does not write a guest draft to the browser', async () => {
     const write = vi.spyOn(Storage.prototype, 'setItem')
     const { workspace } = setup()
-
-    for (const text of ['A', 'As', 'Ass', 'Assume']) act(() => workspace().setDraft(text))
+    act(() => workspace().setDraft('Assume n is odd.'))
+    await new Promise((resolve) => setTimeout(resolve, 900))
     expect(write).not.toHaveBeenCalled()
+  })
 
-    await waitFor(() => expect(write).toHaveBeenCalledTimes(1))
-    expect(JSON.parse(write.mock.calls[0][1])).toEqual({ problem: '', draft: 'Assume' })
+  it('shows a draft kept by an earlier version without deleting it', () => {
+    saveWorkspace({ problem: 'p', draft: 'd' })
+    const { workspace } = setup()
+    expect(workspace().draft).toBe('d')
+    expect(window.localStorage.getItem('hetu.workspace.v1')).not.toBeNull()
   })
 
   it('clears the saved work when the workspace is reset', async () => {
@@ -223,7 +227,7 @@ describe('challenging a question', () => {
 })
 
 describe('revising a step', () => {
-  it('returns to Freeform and asks for the step to be selected', async () => {
+  it('returns to the Draft view and asks for the step to be selected', async () => {
     analyze.mockResolvedValue(LIVE_ANALYSIS)
     const { workspace } = setup()
     type(workspace, PROBLEM, DRAFT)
@@ -232,7 +236,7 @@ describe('revising a step', () => {
 
     act(() => workspace().reviseStep(node))
 
-    expect(workspace().mode).toBe('freeform')
+    expect(workspace().panel).toBe('draft')
     const range = workspace().focusRequest!.range!
     expect(DRAFT.slice(range.start, range.end)).toBe(node.text)
     expect(workspace().draft).toBe(DRAFT)
@@ -246,7 +250,7 @@ describe('revising a step', () => {
 
     act(() => workspace().reviseStep({ ...LIVE_ANALYSIS.nodes[2], span: null }))
 
-    expect(workspace().mode).toBe('freeform')
+    expect(workspace().panel).toBe('draft')
     expect(workspace().focusRequest).toEqual({ range: null })
   })
 })

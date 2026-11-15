@@ -157,3 +157,11 @@ export function layoutGraph(nodes: ReasoningNode[], edges: Edge[]): GraphLayout 
     links: placedLinks,
   }
 }
+
+/**
+ * True when the steps relate in a way a drawing shows better than a list:
+ * at least three steps and two dependencies. Otherwise the list is enough.
+ */
+export function graphIsUseful(analysis: { nodes: unknown[]; edges: unknown[] }): boolean {
+  return analysis.nodes.length >= 3 && analysis.edges.length >= 2
+}

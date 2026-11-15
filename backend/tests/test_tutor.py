@@ -366,3 +366,62 @@ def test_an_empty_reply_is_an_error_not_a_blank_message(hetu):
     replies += [plan(), AIMessage(content=""), AIMessage(content="   ")]
     with pytest.raises(RuntimeError):
         run(said("hello"))
+
+
+# Help the student chose, and notes the student corrected.
+
+
+@pytest.mark.parametrize(
+    ("assist", "action", "guidance"),
+    [
+        ("hint", "give_hint", "Give one hint that moves them one step forward."),
+        ("try", "let_student_try", "Do not explain or solve."),
+        ("example", "demonstrate", "Give one concrete worked example"),
+    ],
+)
+def test_the_help_the_student_chose_decides_the_action(hetu, assist, action, guidance):
+    run, captured, replies, _ = hetu
+    replies += [plan(lead="mathematics", action="explain"), AIMessage(content="Try factoring first.")]
+
+    response = run(said("How do I solve x² - 5x + 6 = 0?", assist=assist))
+
+    assert response.action == action
+    assert guidance in captured[0]["messages"][-1].content
+    assert guidance in captured[1]["messages"][-1].content
+
+
+def test_a_disagreement_is_not_overridden_by_the_chosen_help(hetu):
+    run, _, replies, _ = hetu
+    replies += [plan(need="disagrees", action="reconsider", lead="logic"), AIMessage(content="You may be right.")]
+    response = run(said("Studying with music helps.", "That generalizes from a few friends.", "No, I cited a study.", assist="hint"))
+    assert response.action == "reconsider"
+
+
+def test_the_session_intent_reaches_both_stages(hetu):
+    run, captured, replies, _ = hetu
+    replies += [plan(lead="mathematics"), AIMessage(content="What have you tried?")]
+    run(said("I need to integrate x e^x.", intent="solve"))
+    for call in captured:
+        assert "leave the steps to them" in call["messages"][-1].content
+
+
+def test_notes_the_student_removed_are_never_added_back(hetu):
+    run, captured, replies, _ = hetu
+    replies.append(
+        plan(
+            learning_state={
+                "topic": "inheritance",
+                "misconceptions": ["Thinks a subclass copies its parent's code", "Confuses objects and classes"],
+                "open_questions": ["When to use composition"],
+            }
+        )
+    )
+    replies.append(AIMessage(content="Fine."))
+    notes = LearningState(topic="inheritance", dismissed=["confuses objects and classes"])
+
+    response = run(said("ok", notes=notes))
+
+    assert response.learning_state.misconceptions == ["Thinks a subclass copies its parent's code"]
+    assert response.learning_state.open_questions == ["When to use composition"]
+    assert response.learning_state.dismissed == ["confuses objects and classes"]
+    assert "Removed by the student: confuses objects and classes" in captured[0]["messages"][-1].content

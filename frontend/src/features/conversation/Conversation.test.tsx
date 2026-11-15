@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../../App'
@@ -15,7 +15,15 @@ vi.mock('../../lib/api', async (original) => ({
 }))
 const chat = vi.mocked(sendChat)
 
-const NOTES: LearningState = { topic: null, goal: null, concepts: [], understood: [], misconceptions: [] }
+const NOTES: LearningState = {
+  topic: null,
+  goal: null,
+  concepts: [],
+  understood: [],
+  misconceptions: [],
+  open_questions: [],
+  dismissed: [],
+}
 
 function reply(text: string, extra: Partial<ChatResponse> = {}): ChatResponse {
   return { reply: text, action: 'explain', specialists: [], learning_state: NOTES, inspection: null, checks: [], ...extra }
@@ -34,9 +42,11 @@ beforeEach(() => chat.mockReset())
 describe('the conversation', () => {
   it('is what a student sees first, with a place to type', () => {
     render(<App />)
-    expect(screen.getByRole('heading', { name: 'What are you trying to understand?' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'What are you working on?' })).toBeInTheDocument()
+    expect(within(screen.getByRole('group', { name: 'Starting point' })).getAllByRole('button')).toHaveLength(3)
     expect(field()).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Conversation' })).toHaveAttribute('aria-pressed', 'true')
+    // The workspace is a panel the student opens, not a separate page.
+    expect(screen.getByRole('button', { name: 'Workspace' })).toHaveAttribute('aria-expanded', 'false')
   })
 
   it('sends a message and shows the reply with formatted code and math', async () => {
@@ -118,11 +128,76 @@ describe('the conversation', () => {
     expect(chat.mock.calls[1][0].messages).toHaveLength(1)
   })
 
-  it('starts from a suggested question', async () => {
-    chat.mockResolvedValue(reply('Rayleigh scattering.'))
+  it('lets the student choose a starting point, which Hetu hears for the whole session', async () => {
+    chat.mockResolvedValue(reply('What have you tried?'))
     render(<App />)
-    await userEvent.click(screen.getByRole('button', { name: 'Why does the sky look blue?' }))
-    expect(chat.mock.calls[0][0].messages[0].content).toBe('Why does the sky look blue?')
+    const start = screen.getByRole('button', { name: /Work through a problem/ })
+    await userEvent.click(start)
+
+    expect(start).toHaveAttribute('aria-pressed', 'true')
+    expect(field()).toHaveFocus()
+    expect(field()).toHaveAttribute('placeholder', 'What is the problem, and where are you stuck?')
+
+    await say('Integrate x times e to the x.')
+    await screen.findByText('What have you tried?')
+    await say('I tried substitution.')
+    await vi.waitFor(() => expect(chat).toHaveBeenCalledTimes(2))
+    expect(chat.mock.calls.map((call) => call[0].intent)).toEqual(['solve', 'solve'])
+  })
+
+  it('sends a chosen kind of help with one message only', async () => {
+    chat.mockResolvedValue(reply('Try factoring.'))
+    render(<App />)
+    await userEvent.selectOptions(screen.getByLabelText('Help'), 'Give me a hint')
+    await say('How do I solve x² − 5x + 6 = 0?')
+
+    expect(chat.mock.calls[0][0].assist).toBe('hint')
+    expect(within(log()).getByText('Asked for a hint')).toBeInTheDocument()
+    expect(screen.getByLabelText<HTMLSelectElement>('Help').value).toBe('')
+
+    await screen.findByText('Try factoring.')
+    await say('Thanks.')
+    await vi.waitFor(() => expect(chat).toHaveBeenCalledTimes(2))
+    expect(chat.mock.calls[1][0].assist).toBeUndefined()
+  })
+
+  it('offers two follow-ups that fit the reply, and each sends a visible message', async () => {
+    chat.mockResolvedValueOnce(reply('Light scatters off air.', { action: 'explain' }))
+    chat.mockResolvedValueOnce(reply('Here is one.', { action: 'demonstrate' }))
+    render(<App />)
+    await say('Why is the sky blue?')
+    await screen.findByText('Light scatters off air.')
+
+    const next = screen.getByRole('group', { name: 'Next step' })
+    expect(within(next).getAllByRole('button').map((button) => button.textContent)).toEqual(['Show an example', 'Let me try'])
+    await userEvent.click(within(next).getByRole('button', { name: 'Show an example' }))
+
+    expect(chat.mock.calls[1][0].assist).toBe('example')
+    expect(within(log()).getByText('Show me an example.')).toBeInTheDocument()
+    await screen.findByText('Here is one.')
+    expect(within(screen.getByRole('group', { name: 'Next step' })).getByRole('button', { name: 'Let me try' })).toBeInTheDocument()
+  })
+
+  it('lets the student remove a note, and Hetu is told not to add it back', async () => {
+    const notes = { ...NOTES, topic: 'inheritance', misconceptions: ['Thinks a subclass copies its parent'] }
+    chat.mockResolvedValueOnce(reply('Not quite.', { learning_state: notes }))
+    chat.mockResolvedValueOnce(reply('Okay.', { learning_state: notes }))
+    render(<App />)
+    await say('A subclass copies the parent code.')
+    await screen.findByText('Not quite.')
+
+    await userEvent.click(screen.getByText('Session notes'))
+    await userEvent.click(screen.getByRole('button', { name: 'Remove note: Thinks a subclass copies its parent' }))
+    expect(screen.queryByText('Thinks a subclass copies its parent')).toBeNull()
+
+    await say('I meant something else.')
+    await screen.findByText('Okay.')
+    expect(chat.mock.calls[1][0].learning_state).toMatchObject({
+      misconceptions: [],
+      dismissed: ['Thinks a subclass copies its parent'],
+    })
+    // A reply that still lists the note does not bring it back.
+    expect(screen.queryByText('Thinks a subclass copies its parent')).toBeNull()
   })
 
   it('shows the result of an exact check apart from the reply', async () => {
@@ -150,17 +225,38 @@ describe('the conversation', () => {
 })
 
 describe('a session', () => {
-  it('is restored after a reload', async () => {
+  it('is not kept after a reload for a guest', async () => {
     chat.mockResolvedValue(reply('A class is a blueprint.'))
     const first = render(<App />)
     await say("I don't understand classes.")
     await screen.findByText('A class is a blueprint.')
-    await vi.waitFor(() => expect(window.localStorage.getItem('hetu.session.v1')).toContain('blueprint'))
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    expect(window.localStorage.getItem('hetu.session.v1')).toBeNull()
     first.unmount()
 
     render(<App />)
-    expect(within(log()).getByText("I don't understand classes.")).toBeInTheDocument()
-    expect(within(log()).getByText('A class is a blueprint.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'What are you working on?' })).toBeInTheDocument()
+    expect(screen.getByText(/conversation ends when you leave/)).toBeInTheDocument()
+  })
+
+  it('offers a conversation kept by an earlier version, and deletes it only when asked', async () => {
+    const saved = { turns: [{ id: 1, role: 'student', content: 'An old question.' }], notes: null }
+    window.localStorage.setItem('hetu.session.v1', JSON.stringify(saved))
+    render(<App />)
+
+    const notice = screen.getByRole('region', { name: /earlier visit/ })
+    await userEvent.click(within(notice).getByRole('button', { name: 'Open it' }))
+    expect(within(log()).getByText('An old question.')).toBeInTheDocument()
+    // A guest keeps the old copy in the browser until they delete it.
+    expect(window.localStorage.getItem('hetu.session.v1')).toContain('An old question.')
+  })
+
+  it('deletes the earlier conversation when the student chooses to', async () => {
+    window.localStorage.setItem('hetu.session.v1', JSON.stringify({ turns: [{ id: 1, role: 'student', content: 'Old.' }] }))
+    render(<App />)
+    await userEvent.click(screen.getByRole('button', { name: 'Delete it' }))
+    expect(window.localStorage.getItem('hetu.session.v1')).toBeNull()
+    expect(screen.queryByRole('region', { name: /earlier visit/ })).toBeNull()
   })
 
   it('can be started over, which also drops a reply that is still on its way', async () => {
@@ -171,18 +267,17 @@ describe('a session', () => {
     await screen.findByText('First reply.')
     await say('Second question.')
 
-    await userEvent.click(screen.getByRole('button', { name: 'New session' }))
+    await userEvent.click(screen.getByRole('button', { name: 'New' }))
     pending.resolve(reply('A late reply.'))
 
-    expect(await screen.findByRole('heading', { name: 'What are you trying to understand?' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'What are you working on?' })).toBeInTheDocument()
     expect(screen.queryByText('A late reply.')).toBeNull()
-    await vi.waitFor(() => expect(window.localStorage.getItem('hetu.session.v1')).toBeNull())
   })
 
   it('ignores damaged saved data', () => {
     window.localStorage.setItem('hetu.session.v1', '{"turns": "nope"')
     render(<App />)
-    expect(screen.getByRole('heading', { name: 'What are you trying to understand?' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'What are you working on?' })).toBeInTheDocument()
   })
 })
 
@@ -210,27 +305,27 @@ describe('proofs in the conversation', () => {
 
     expect(screen.getByRole('heading', { name: 'Analysis' })).toHaveFocus()
     expect(screen.getByRole('group', { name: /reasoning graph/i })).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Freeform' }))
-    expect(screen.getByLabelText<HTMLTextAreaElement>('Your reasoning').value).toBe(DRAFT)
+    await userEvent.click(screen.getByRole('button', { name: 'Draft' }))
+    expect(screen.getByLabelText<HTMLTextAreaElement>('Your work').value).toBe(DRAFT)
 
     // The conversation is still there when the student comes back.
-    await userEvent.click(screen.getByRole('button', { name: 'Conversation' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Back to conversation' }))
     expect(within(log()).getByText('Look at your last step.')).toBeInTheDocument()
   })
 
   it('asks before replacing other work in the workspace', async () => {
     chat.mockResolvedValue(reply('Look at your last step.', { inspection }))
     render(<App />)
-    await userEvent.click(screen.getByRole('button', { name: 'Freeform' }))
-    await userEvent.type(screen.getByLabelText('Your reasoning'), 'My unrelated essay.')
-    await userEvent.click(screen.getByRole('button', { name: 'Conversation' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Workspace' }))
+    await userEvent.type(screen.getByLabelText('Your work'), 'My unrelated essay.')
+    await userEvent.click(screen.getByRole('button', { name: 'Back to conversation' }))
     await say('Here is my proof.')
 
     await userEvent.click(await screen.findByRole('button', { name: 'Open reasoning graph' }))
     expect(screen.getByText('This replaces the text in your workspace.')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Freeform' }))
-    expect(screen.getByLabelText<HTMLTextAreaElement>('Your reasoning').value).toBe('My unrelated essay.')
+    await userEvent.click(screen.getByRole('button', { name: 'Workspace' }))
+    expect(screen.getByLabelText<HTMLTextAreaElement>('Your work').value).toBe('My unrelated essay.')
   })
 
   it('sends the open question back when the student replies, so a disagreement can be reconsidered', async () => {
@@ -253,32 +348,64 @@ describe('proofs in the conversation', () => {
 })
 
 describe('the workspace and the conversation', () => {
-  it('takes a draft into the conversation from Freeform', async () => {
+  it('sends the whole draft for feedback and returns to the conversation', async () => {
     chat.mockResolvedValue(reply('Here is what I see.'))
     render(<App />)
-    await userEvent.click(screen.getByRole('button', { name: 'Freeform' }))
-    await userEvent.type(screen.getByLabelText('Your reasoning'), 'My essay introduction.')
-    await userEvent.click(screen.getByRole('button', { name: 'Discuss with Hetu' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Workspace' }))
+    await userEvent.type(screen.getByLabelText('Your work'), 'My essay introduction.')
+    await userEvent.click(screen.getByRole('button', { name: 'Get feedback' }))
 
     expect(await screen.findByText('Here is what I see.')).toBeInTheDocument()
     expect(chat.mock.calls[0][0].workspace).toEqual({ problem: '', draft: 'My essay introduction.' })
-    expect(screen.getByText('Sent with your workspace draft.')).toBeInTheDocument()
+    expect(chat.mock.calls[0][0].assist).toBe('check')
+    expect(screen.getByText(/Workspace included/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Workspace' })).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('quotes a selected part of the draft in the composer, with the workspace included', async () => {
+    chat.mockResolvedValue(reply('That sentence makes a claim.'))
+    render(<App />)
+    await userEvent.click(screen.getByRole('button', { name: 'Workspace' }))
+    const draft = screen.getByLabelText<HTMLTextAreaElement>('Your work')
+    await userEvent.type(draft, 'Factories grew. Wages rose for some.')
+    draft.setSelectionRange(16, 36)
+    fireEvent.select(draft)
+    await userEvent.click(screen.getByRole('button', { name: 'Ask about the selection' }))
+
+    expect(field().value).toBe('> Wages rose for some.\n\n')
+    expect(field()).toHaveFocus()
+    expect(screen.getByLabelText('Include my workspace')).toBeChecked()
+    await userEvent.type(field(), 'Is this evidence?')
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    expect(chat.mock.calls[0][0].messages[0].content).toBe('> Wages rose for some.\n\nIs this evidence?')
+    expect(chat.mock.calls[0][0].workspace).toEqual({ problem: '', draft: 'Factories grew. Wages rose for some.' })
+    expect(within(log()).getByText('Wages rose for some.').tagName).toBe('BLOCKQUOTE')
+  })
+
+  it('quotes a step from the structure view in the composer', async () => {
+    chat.mockResolvedValue(reply('Look at your last step.', { inspection: { problem: PROBLEM, draft: DRAFT, analysis: LIVE_ANALYSIS } }))
+    render(<App />)
+    await say('Here is my proof.')
+    await userEvent.click(await screen.findByRole('button', { name: 'Open reasoning graph' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Ask about this step' }))
+    expect(field().value).toBe('> so n must be even.\n\n')
   })
 
   it('shares the draft only when the student ticks the box', async () => {
     chat.mockResolvedValue(reply('Okay.'))
     render(<App />)
-    expect(screen.queryByLabelText(/Share my workspace draft/)).toBeNull()
+    expect(screen.queryByLabelText('Include my workspace')).toBeNull()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Freeform' }))
-    await userEvent.type(screen.getByLabelText('Your reasoning'), 'A draft.')
-    await userEvent.click(screen.getByRole('button', { name: 'Conversation' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Workspace' }))
+    await userEvent.type(screen.getByLabelText('Your work'), 'A draft.')
+    await userEvent.click(screen.getByRole('button', { name: 'Back to conversation' }))
 
     await say('A question without the draft.')
     await screen.findByText('Okay.')
     expect(chat.mock.calls[0][0].workspace).toBeUndefined()
 
-    await userEvent.click(screen.getByLabelText(/Share my workspace draft/))
+    await userEvent.click(screen.getByLabelText('Include my workspace'))
     await say('Now with it.')
     await vi.waitFor(() => expect(chat.mock.calls[1][0].workspace).toEqual({ problem: '', draft: 'A draft.' }))
   })

@@ -12,7 +12,7 @@ function inspectionOf(analysis: Analysis, extra: Partial<Inspection> = {}): Insp
 }
 
 function show(inspection: Inspection | null, props: Partial<Parameters<typeof StructuredView>[0]> = {}) {
-  const handlers = { onInspect: vi.fn(), onRevise: vi.fn(), onChallenge: vi.fn() }
+  const handlers = { onInspect: vi.fn(), onRevise: vi.fn(), onDiscuss: vi.fn(), onChallenge: vi.fn() }
   render(
     <StructuredView
       draft={DRAFT}

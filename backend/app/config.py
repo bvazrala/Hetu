@@ -46,12 +46,22 @@ class Settings(BaseSettings):
     # client address. The second is shared by all clients.
     rate_limit_per_minute: int = 20
     daily_analysis_limit: int = 500
+    # One client's share of the day: a guest is counted by address, a
+    # signed-in user by their verified account.
+    daily_limit_per_guest: int = 40
+    daily_limit_per_user: int = 120
+
+    # Base URL of Neon Auth, for example
+    # https://ep-xxx.neonauth.us-east-2.aws.neon.tech/neondb/auth
+    # When set, a signed-in user's token is verified against its public keys
+    # and their requests count against their account. Unset: everyone is a guest.
+    neon_auth_url: str | None = None
 
     # How many proxies in front of this server append to X-Forwarded-For.
     # 0 ignores the header. See `client_address` in `app/limits.py`.
     trusted_proxy_hops: int = 0
 
-    @field_validator("llm_provider", "llm_model", mode="before")
+    @field_validator("llm_provider", "llm_model", "neon_auth_url", mode="before")
     @classmethod
     def _blank_is_unset(cls, value: str | None) -> str | None:
         if isinstance(value, str) and not value.strip():

@@ -34,10 +34,12 @@ from app.schemas import (
     MAX_DRAFT_CHARS,
     MAX_PROBLEM_CHARS,
     Action,
+    Assist,
     Challenge,
     ChatRequest,
     ChatResponse,
     Inspection,
+    Intent,
     LearningState,
     Specialist,
     ToolCheck,
@@ -105,8 +107,15 @@ Decide `need` and `action` together:
 - The student explicitly asks for the answer or a full solution: need "wants_solution", action "answer_directly".
 - The student disagrees with something Hetu said: need "disagrees", action "reconsider".
 - The student is doing well and wants to go further: action "explore".
+- The student wants a nudge: action "give_hint". The student wants to work it out alone: action "let_student_try".
 - Use "check_understanding" sparingly, and never for two turns in a row. Questioning is one technique,
   not the default.
+
+When <requested_help> is present, the student chose the kind of help themselves. Plan around it.
+
+Judge `level` only from what the student has shown: their own explanations, work, and questions over
+the conversation. Not from age, vocabulary, grammar, or a single message. Use "unknown" until there
+is evidence.
 
 Choose `lead`, the one who writes the reply:
 - "mathematics": mathematics and statistics.
@@ -131,7 +140,11 @@ Update `learning_state`, starting from the notes you are given:
 - `concepts`: concepts covered so far, as short phrases.
 - `understood`: only what the student has shown in their own words or work. Something Hetu explained
   does not count until the student uses it.
-- `misconceptions`: possible mix-ups. These are guesses, so phrase them tentatively.
+- `misconceptions`: substantive mix-ups the student's own words show. These are guesses, so phrase
+  them tentatively. Remove one once the student shows they have moved past it. Typos and slips of
+  wording are not misconceptions.
+- `open_questions`: questions the student has raised and is still working on. Remove them once answered.
+- Never add back anything listed under "Removed by the student".
 Keep every list short. Do not record judgments about the student's ability.
 """
 
@@ -149,6 +162,9 @@ How to teach:
   ask for the full answer, give it, with the reasoning that makes it understandable.
 - When they make a mistake, name the exact step or claim, say what is wrong with it, and say what
   to try. Do not invent errors.
+- Use the session notes to shape what you teach next, for example by addressing a noted mix-up when
+  the topic comes back to it. Do not remind the student of an earlier mistake that has no bearing
+  on the current step.
 - If they disagree with you, look again with an open mind. Say plainly when you were wrong.
 - Never invent facts, sources, quotations, statistics, or experimental results. Say what is well
   established, what is uncertain, and what you do not know.
@@ -190,7 +206,8 @@ and examine proofs and calculations.
   solution. If it found nothing to question, say so as your reading, not as a check.
   Mention that the reasoning graph shows how the steps connect.
 - When the inspection carries a challenge result, tell the student honestly whether the question
-  was withdrawn or still stands, and why.
+  was withdrawn or still stands, and why. If their reason is right but missing from what they wrote,
+  say so and ask them to add it to the proof in their own words. Do not write the proof for them.
 """,
     "science": """\
 You are Hetu's science specialist for physics, chemistry, biology, and related fields.
@@ -258,6 +275,39 @@ CONSULT_DESCRIPTIONS: dict[Specialist, str] = {
     "logic": "Whether an argument's evidence supports its conclusion.",
 }
 
+# The student's choice of help decides the action. The guidance tells the responder what that means.
+ASSIST_ACTIONS: dict[Assist, Action] = {
+    "explain": "explain",
+    "hint": "give_hint",
+    "check": "inspect_reasoning",
+    "example": "demonstrate",
+    "try": "let_student_try",
+    "challenge": "challenge_assumption",
+}
+
+ASSIST_GUIDANCE: dict[Assist, str] = {
+    "explain": "The student asked for an explanation. Give a clear, complete one at their level. "
+    "Do not hold it back or turn it into questions.",
+    "hint": "The student asked for a hint. Give one hint that moves them one step forward. "
+    "Do not give the answer or the whole method.",
+    "check": "The student asked you to check their reasoning. Say what holds up, then name the first "
+    "step that does not and why. Do not rewrite their work.",
+    "example": "The student asked for an example. Give one concrete worked example, then connect it "
+    "back to the idea it shows.",
+    "try": "The student wants to try on their own. Do not explain or solve. In one or two sentences, "
+    "say what to attempt next, and that you will look at it when they are ready.",
+    "challenge": "The student asked you to challenge their assumption. Name the assumption their "
+    "reasoning leans on most and test it with a counterexample or one pointed question. "
+    "If it holds up, say so.",
+}
+
+INTENT_GUIDANCE: dict[Intent, str] = {
+    "understand": "The student started this session to understand something.",
+    "solve": "The student started this session to work through a problem themselves. Guide them, "
+    "and leave the steps to them unless they ask for the solution.",
+    "examine": "The student started this session to get feedback on their own reasoning.",
+}
+
 Tutor = Callable[[ChatRequest], Awaitable[ChatResponse]]
 
 # A lead's own turn, one consultation, the final reply, and room for tool calls.
@@ -287,8 +337,29 @@ def _describe_notes(state: LearningState) -> str:
         f"Concepts covered: {', '.join(state.concepts) or 'none yet'}",
         f"Shown by the student: {', '.join(state.understood) or 'nothing yet'}",
         f"Possible mix-ups (uncertain): {', '.join(state.misconceptions) or 'none noted'}",
+        f"Still exploring: {', '.join(state.open_questions) or 'nothing noted'}",
     ]
+    if state.dismissed:
+        lines.append(f"Removed by the student: {', '.join(state.dismissed)}")
     return "\n".join(lines)
+
+
+def _respect_dismissals(planned: LearningState, prior: LearningState) -> LearningState:
+    """Keep the student's removals, whatever the coach wrote."""
+    removed = {note.casefold() for note in prior.dismissed}
+
+    def keep(notes: list[str]) -> list[str]:
+        return [note for note in notes if note.casefold() not in removed]
+
+    return planned.model_copy(
+        update={
+            "concepts": keep(planned.concepts),
+            "understood": keep(planned.understood),
+            "misconceptions": keep(planned.misconceptions),
+            "open_questions": keep(planned.open_questions),
+            "dismissed": prior.dismissed,
+        }
+    )
 
 
 def _describe_inspection(inspection: Inspection) -> str:
@@ -313,6 +384,8 @@ def _final_message(request: ChatRequest, plan: TurnPlan, inspection: Inspection 
     """The last student message, wrapped with the context the responder needs for this turn."""
     notes = [
         f"The student's need: {plan.need}. What to do: {plan.action}. Apparent level: {plan.level}.",
+        ASSIST_GUIDANCE[request.assist] if request.assist else "",
+        INTENT_GUIDANCE[request.intent] if request.intent else "",
         plan.brief.strip(),
         _describe_notes(plan.learning_state),
     ]
@@ -347,6 +420,11 @@ class LearningSystem:
 
     async def respond(self, request: ChatRequest) -> ChatResponse:
         plan = await self._plan(request)
+        prior = request.learning_state or LearningState()
+        plan.learning_state = _respect_dismissals(plan.learning_state, prior)
+        # A disagreement is handled as one, whatever help was selected.
+        if request.assist and plan.need != "disagrees":
+            plan.action = ASSIST_ACTIONS[request.assist]
         inspection, note = await self._inspect(request, plan)
 
         # An inspected proof is always discussed by the mathematics specialist.
@@ -376,6 +454,10 @@ class LearningSystem:
                 "Hetu's latest proof feedback asked this question about the student's step "
                 f"\"{request.proof_context.step_text}\": {request.proof_context.question}"
             )
+        if request.intent is not None:
+            context.append(INTENT_GUIDANCE[request.intent])
+        if request.assist is not None:
+            context.append(f"<requested_help>\n{ASSIST_GUIDANCE[request.assist]}\n</requested_help>")
         messages = [
             {"role": "system", "content": COACH_PROMPT},
             *_conversation(request)[:-1],

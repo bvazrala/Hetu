@@ -6,7 +6,7 @@ provider bill, so a spend limit at the provider is still needed.
 """
 
 import time
-from collections import defaultdict, deque
+from collections import Counter, defaultdict, deque
 from collections.abc import Callable
 
 _WINDOW_SECONDS = 60
@@ -21,15 +21,21 @@ class RequestLimiter:
         self._recent: defaultdict[str, deque[float]] = defaultdict(deque)
         self._day = -1
         self._count_today = 0
+        self._client_today: Counter[str] = Counter()
 
-    def check(self, client: str) -> str | None:
-        """Record one request. Return None if it may proceed, or a message if it may not."""
+    def check(self, client: str, client_per_day: int | None = None) -> str | None:
+        """Record one request. Return None if it may proceed, or a message if it may not.
+
+        `client_per_day` caps one client's share of the day, so a single
+        person cannot use up the limit that everyone shares.
+        """
         now = self._clock()
 
         day = int(now // _SECONDS_PER_DAY)
         if day != self._day:
             self._day, self._count_today = day, 0
             self._recent.clear()
+            self._client_today.clear()
 
         recent = self._recent[client]
         while recent and recent[0] <= now - _WINDOW_SECONDS:
@@ -37,11 +43,14 @@ class RequestLimiter:
 
         if len(recent) >= self.per_minute:
             return "Too many requests. Wait a minute and try again."
+        if client_per_day is not None and self._client_today[client] >= client_per_day:
+            return "You have reached today's limit for this device or account. Try again tomorrow."
         if self._count_today >= self.per_day:
             return "Hetu has reached its daily limit. Try again tomorrow."
 
         recent.append(now)
         self._count_today += 1
+        self._client_today[client] += 1
         return None
 
 

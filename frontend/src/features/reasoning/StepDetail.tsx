@@ -16,6 +16,7 @@ interface Props {
   challenging: boolean
   challengeError: string | null
   onRevise: () => void
+  onDiscuss: () => void
   onChallenge: (reason: string) => void
 }
 
@@ -27,7 +28,7 @@ function listSteps(numbers: number[]): string {
   return numbers.map((n) => `step ${n}`).join(', ')
 }
 
-/** Everything Hetu knows about one step, with the two ways to respond to it. */
+/** Everything Hetu knows about one step, with the ways to respond to it. */
 export function StepDetail({
   node,
   number,
@@ -38,6 +39,7 @@ export function StepDetail({
   challenging,
   challengeError,
   onRevise,
+  onDiscuss,
   onChallenge,
 }: Props) {
   const [challengeOpen, setChallengeOpen] = useState(false)
@@ -96,6 +98,9 @@ export function StepDetail({
       <div className="flex flex-wrap gap-3">
         <button type="button" className={actionButton} onClick={onRevise}>
           Revise this step
+        </button>
+        <button type="button" className={actionButton} onClick={onDiscuss}>
+          Ask about this step
         </button>
         {observation && canChallenge && !challengeOpen && (
           <button type="button" className={actionButton} onClick={() => setChallengeOpen(true)}>

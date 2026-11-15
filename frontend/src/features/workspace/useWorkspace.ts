@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Mode } from '../../components/ModeToggle'
 import { AnalyzeError, analyzeDraft } from '../../lib/api'
 import { demoExample, findSampleAnalysis } from '../../lib/examples'
 import { toStringRange, type StringRange } from '../../lib/spans'
-import { clearWorkspace, loadWorkspace, saveWorkspace } from '../../lib/storage'
+import { clearWorkspace, loadWorkspace } from '../../lib/storage'
+import type { Store } from '../../lib/store'
 import type { Analysis, Observation, ProofInspection, ReasoningNode } from '../../lib/types'
 
 /** An analysis together with the exact text it was made for. */
@@ -17,6 +17,9 @@ export interface Inspection {
   challengeReason: string | null
 }
 
+/** The two views of the workspace panel. */
+export type WorkspaceView = 'draft' | 'structure'
+
 /** A request to put the cursor in the draft, optionally selecting a range. */
 export interface FocusRequest {
   range: StringRange | null
@@ -25,7 +28,10 @@ export interface FocusRequest {
 export const DISCARDED_NOTICE =
   'Your draft changed while Hetu was reading it, so that analysis was discarded. Inspect again when you are ready.'
 
-const SAVE_DELAY_MS = 400
+const SAVE_DELAY_MS = 800
+
+/** Where the draft is kept. The values match the conversation's, so one prompt can cover both. */
+export type WorkspaceSave = 'off' | 'local' | 'ask' | 'saving' | 'saved' | 'error'
 const GENERIC_FAILURE = 'The analysis could not be completed.'
 
 function failureMessage(error: unknown): string {
@@ -36,14 +42,19 @@ function failureMessage(error: unknown): string {
  * Holds the student's work and everything known about it.
  *
  * The problem and draft live here, above every view. Only typing, loading
- * the example, opening a proof from the conversation, and clearing the
- * workspace ever write to them.
+ * the example, opening a proof from the conversation, clearing the
+ * workspace, and loading the account's draft ever write to them.
+ *
+ * A guest's draft stays in this tab. A draft that an earlier version kept in
+ * the browser is shown and left there. A signed-in student's draft is saved
+ * to their account.
  */
-export function useWorkspace() {
+export function useWorkspace(store: Store | null = null) {
   const [saved] = useState(loadWorkspace)
   const [problem, setProblemState] = useState(saved?.problem ?? '')
   const [draft, setDraftState] = useState(saved?.draft ?? '')
-  const [mode, setMode] = useState<Mode>('conversation')
+  // Which view of the workspace panel is open. Null when the panel is closed.
+  const [panel, setPanel] = useState<WorkspaceView | null>(null)
 
   const [inspection, setInspection] = useState<Inspection | null>(null)
   const [busy, setBusy] = useState<'inspect' | 'challenge' | null>(null)
@@ -71,14 +82,75 @@ export function useWorkspace() {
     setDraftState(value)
   }
 
+  const [save, setSave] = useState<WorkspaceSave>(store ? 'saved' : 'off')
+  // Set once the account's draft has been read, so an empty draft is not saved over it.
+  const [loaded, setLoaded] = useState(false)
+
+  // Signing in or out changes where the draft belongs.
+  const signedIn = store !== null
+  const previouslySignedIn = useRef<boolean | null>(null)
   useEffect(() => {
-    const timer = setTimeout(() => saveWorkspace({ problem, draft }), SAVE_DELAY_MS)
+    const wasSignedIn = previouslySignedIn.current
+    previouslySignedIn.current = signedIn
+    if (wasSignedIn === signedIn) return
+    if (!signedIn) {
+      setLoaded(false)
+      if (wasSignedIn) {
+        // After sign-out, the account's draft does not stay on screen.
+        replaceWorkspace('', '', false)
+        setInspection(null)
+      }
+      setSave('off')
+      return
+    }
+    if (latest.current.problem.trim() !== '' || latest.current.draft.trim() !== '') {
+      // Work written as a guest is never put into the account without asking.
+      setSave('ask')
+      setLoaded(true)
+      return
+    }
+    let cancelled = false
+    setSave('saving')
+    store!
+      .loadWorkspace()
+      .then((stored) => {
+        if (cancelled) return
+        if (stored && latest.current.problem === '' && latest.current.draft === '') {
+          replaceWorkspace(stored.problem, stored.draft, false)
+        }
+        setLoaded(true)
+        setSave('saved')
+      })
+      .catch(() => !cancelled && setSave('error'))
+    return () => {
+      cancelled = true
+    }
+    // replaceWorkspace only touches state setters and refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signedIn])
+
+  const syncing = store !== null && loaded && (save === 'saved' || save === 'saving' || save === 'error')
+  const lastSaved = useRef<string | null>(null)
+  useEffect(() => {
+    if (!syncing || !store) return
+    const snapshot = JSON.stringify({ problem, draft })
+    if (snapshot === lastSaved.current) return
+    const timer = setTimeout(() => {
+      setSave('saving')
+      store
+        .saveWorkspace({ problem, draft })
+        .then(() => {
+          lastSaved.current = snapshot
+          setSave('saved')
+        })
+        .catch(() => setSave('error'))
+    }, SAVE_DELAY_MS)
     return () => clearTimeout(timer)
-  }, [problem, draft])
+  }, [syncing, store, problem, draft])
 
   const isCurrent = inspection !== null && inspection.problem === problem && inspection.draft === draft
 
-  function replaceWorkspace(nextProblem: string, nextDraft: string) {
+  function replaceWorkspace(nextProblem: string, nextDraft: string, show = true) {
     requestId.current += 1
     setProblem(nextProblem)
     setDraft(nextDraft)
@@ -86,7 +158,7 @@ export function useWorkspace() {
     setError(null)
     setChallengeError(null)
     setNotice(null)
-    setMode('freeform')
+    if (show) setPanel('draft')
   }
 
   function loadExample() {
@@ -96,6 +168,7 @@ export function useWorkspace() {
   function reset() {
     replaceWorkspace('', '')
     setInspection(null)
+    // Clearing is the student's choice, so a draft kept by an earlier version goes too.
     clearWorkspace()
     setFocusRequest({ range: null })
   }
@@ -137,7 +210,7 @@ export function useWorkspace() {
 
     setInspection({ ...sent, analysis, fallbackReason, challengeReason: null })
     setResultVersion((version) => version + 1)
-    setMode('structured')
+    setPanel('structure')
   }
 
   /** Asks Hetu to reconsider one question in light of the student's reason. */
@@ -171,20 +244,20 @@ export function useWorkspace() {
     replaceWorkspace(nextProblem, nextDraft)
     setInspection({ problem: nextProblem, draft: nextDraft, analysis, fallbackReason: null, challengeReason: null })
     setResultVersion((version) => version + 1)
-    setMode('structured')
+    setPanel('structure')
   }
 
   /** Returns to the editor with the step's text selected, when Hetu knows where it is. */
   function reviseStep(node: ReasoningNode) {
-    setMode('freeform')
+    setPanel('draft')
     setFocusRequest({ range: isCurrent ? toStringRange(draft, node.span) : null })
   }
 
   return {
     problem,
     draft,
-    mode,
-    setMode,
+    panel,
+    setPanel,
     setProblem,
     setDraft,
     /** The latest analysis, or null if there is none or the text has changed since. */
@@ -204,6 +277,14 @@ export function useWorkspace() {
     openInspection,
     loadExample,
     reset,
+    /** Where the draft is kept right now. */
+    save,
+    /** The student agreed to save the draft they wrote as a guest. */
+    saveToAccount: () => {
+      if (store) setSave('saved')
+    },
+    /** The student chose to keep this draft out of their account. */
+    keepLocal: () => setSave('local'),
   }
 }
 

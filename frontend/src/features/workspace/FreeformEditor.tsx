@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type SyntheticEvent } from 'react'
 import { MAX_DRAFT_CHARS, MAX_PROBLEM_CHARS } from '../../lib/api'
 import type { FocusRequest } from './useWorkspace'
 
@@ -9,22 +9,25 @@ interface Props {
   error: string | null
   notice: string | null
   focusRequest: FocusRequest | null
+  /** Where the draft is kept, in a few words. */
+  saveLabel?: string
   onProblemChange: (value: string) => void
   onDraftChange: (value: string) => void
   onLoadExample: () => void
+  /** Maps the draft into steps and opens the Structure view. */
   onInspect: () => void
+  /** Sends the whole draft into the conversation for feedback. */
   onDiscuss: () => void
+  /** Quotes part of the draft in the composer, for the student to ask about. */
+  onAskAbout: (text: string) => void
   onReset: () => void
 }
 
-const fieldClass =
-  'w-full rounded-md border border-rule bg-surface px-4 py-3 font-serif text-lg leading-relaxed ' +
-  'placeholder:text-muted focus-visible:border-accent'
-
-const quietButton =
-  'rounded-md px-3 py-2.5 text-sm font-medium text-muted underline-offset-4 hover:text-ink hover:underline ' +
-  'disabled:cursor-not-allowed disabled:opacity-50'
-
+/**
+ * A place for longer work than fits in a chat message: proofs, solutions,
+ * essays, notes. Everything here stays in the workspace until the student
+ * chooses to share it.
+ */
 export function FreeformEditor({
   problem,
   draft,
@@ -32,17 +35,20 @@ export function FreeformEditor({
   error,
   notice,
   focusRequest,
+  saveLabel = 'Not saved. Stays in this tab.',
   onProblemChange,
   onDraftChange,
   onLoadExample,
   onInspect,
   onDiscuss,
+  onAskAbout,
   onReset,
 }: Props) {
   const draftField = useRef<HTMLTextAreaElement>(null)
   const [confirmingReset, setConfirmingReset] = useState(false)
+  const [selection, setSelection] = useState('')
 
-  const canInspect = draft.trim().length > 0 && !busy
+  const hasDraft = draft.trim().length > 0
   const hasWork = problem !== '' || draft !== ''
 
   useEffect(() => {
@@ -51,21 +57,27 @@ export function FreeformEditor({
     field.focus()
     if (focusRequest.range) {
       field.setSelectionRange(focusRequest.range.start, focusRequest.range.end)
+      setSelection(field.value.slice(focusRequest.range.start, focusRequest.range.end).trim())
     }
   }, [focusRequest])
 
+  function trackSelection(event: SyntheticEvent<HTMLTextAreaElement>) {
+    const { selectionStart, selectionEnd, value } = event.currentTarget
+    setSelection(value.slice(selectionStart, selectionEnd).trim())
+  }
+
   function inspectOnShortcut(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && canInspect) {
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && hasDraft && !busy) {
       event.preventDefault()
       onInspect()
     }
   }
 
   return (
-    <div className="space-y-6" aria-busy={busy}>
+    <div className="space-y-5" aria-busy={busy}>
       <div>
-        <label htmlFor="problem" className="mb-2 block text-sm font-medium text-muted">
-          Problem
+        <label htmlFor="problem" className="mb-1.5 block text-sm font-medium text-muted">
+          Problem or goal
         </label>
         <textarea
           id="problem"
@@ -74,66 +86,67 @@ export function FreeformEditor({
           value={problem}
           onChange={(e) => onProblemChange(e.target.value)}
           onKeyDown={inspectOnShortcut}
-          placeholder="What are you trying to show?"
-          className={fieldClass + ' resize-y'}
+          placeholder="What are you trying to show, solve, or argue?"
+          className="field resize-y"
         />
       </div>
 
       <div>
-        <div className="mb-2 flex items-baseline justify-between gap-4">
+        <div className="mb-1.5 flex items-baseline justify-between gap-4">
           <label htmlFor="draft" className="block text-sm font-medium text-muted">
-            Your reasoning
+            Your work
           </label>
-          <span className="text-xs text-muted">Saved in this browser</span>
+          <span aria-live="polite" className="text-xs text-muted">
+            {saveLabel}
+          </span>
         </div>
         <textarea
           id="draft"
           ref={draftField}
-          rows={9}
+          rows={10}
           maxLength={MAX_DRAFT_CHARS}
           value={draft}
           onChange={(e) => onDraftChange(e.target.value)}
+          onSelect={trackSelection}
           onKeyDown={inspectOnShortcut}
           placeholder="Write it your way. Rough steps are fine."
-          className={fieldClass + ' min-h-48 resize-y'}
+          aria-describedby="draft-help"
+          className="field min-h-56 resize-y"
         />
+        <div className="mt-2 flex min-h-8 flex-wrap items-center gap-3">
+          <p id="draft-help" className="text-xs text-muted">
+            Select part of your work to ask Hetu about just that part.
+          </p>
+          {selection !== '' && (
+            <button type="button" className="btn btn-secondary btn-small" onClick={() => onAskAbout(selection)}>
+              Ask about the selection
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" onClick={onDiscuss} disabled={!hasDraft || busy} className="btn btn-primary">
+          Get feedback
+        </button>
         <button
           type="button"
           onClick={onInspect}
-          disabled={!canInspect}
+          disabled={!hasDraft || busy}
           aria-describedby="inspect-note"
           aria-keyshortcuts="Control+Enter Meta+Enter"
-          className="rounded-md bg-accent px-5 py-2.5 font-medium text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-rule disabled:text-muted"
+          className="btn btn-secondary"
         >
-          {busy ? 'Inspecting…' : 'Inspect reasoning'}
-        </button>
-        <button
-          type="button"
-          onClick={onDiscuss}
-          disabled={!canInspect}
-          className="rounded-md border border-accent px-5 py-2.5 font-medium text-accent transition-colors hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Discuss with Hetu
-        </button>
-        <button
-          type="button"
-          onClick={onLoadExample}
-          disabled={busy}
-          className="rounded-md border border-accent px-5 py-2.5 font-medium text-accent transition-colors hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Try an example
+          {busy ? 'Mapping the steps…' : 'Map the steps'}
         </button>
 
-        <div className="sm:ml-auto">
+        <div className="ml-auto flex flex-wrap items-center">
           {confirmingReset ? (
             <span className="flex flex-wrap items-center gap-1 text-sm">
-              <span className="text-muted">Clear the problem and your reasoning?</span>
+              <span className="text-muted">Clear the problem and your work?</span>
               <button
                 type="button"
-                className={quietButton + ' text-ink'}
+                className="btn btn-quiet btn-small text-ink"
                 onClick={() => {
                   setConfirmingReset(false)
                   onReset()
@@ -141,19 +154,24 @@ export function FreeformEditor({
               >
                 Yes, clear
               </button>
-              <button type="button" className={quietButton} onClick={() => setConfirmingReset(false)}>
+              <button type="button" className="btn btn-quiet btn-small" onClick={() => setConfirmingReset(false)}>
                 Keep
               </button>
             </span>
           ) : (
-            <button
-              type="button"
-              className={quietButton}
-              disabled={!hasWork}
-              onClick={() => setConfirmingReset(true)}
-            >
-              Clear workspace
-            </button>
+            <>
+              <button type="button" onClick={onLoadExample} disabled={busy} className="btn btn-quiet btn-small">
+                Try an example
+              </button>
+              <button
+                type="button"
+                className="btn btn-quiet btn-small"
+                disabled={!hasWork}
+                onClick={() => setConfirmingReset(true)}
+              >
+                Clear workspace
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -161,18 +179,18 @@ export function FreeformEditor({
       {/* One live region, so screen readers hear each change of state. */}
       <div id="inspect-note" aria-live="polite" className="min-h-10 text-sm">
         {busy ? (
-          <p className="text-muted">Reading your draft. This usually takes a few seconds.</p>
+          <p className="text-muted">Reading your work. This usually takes a few seconds.</p>
         ) : error ? (
           <p className="border-l-2 border-flag pl-3">
             <span className="font-medium">{error}</span>{' '}
-            <span className="text-muted">Your draft is unchanged. You can try again.</span>
+            <span className="text-muted">Your work is unchanged. You can try again.</span>
           </p>
         ) : notice ? (
           <p className="border-l-2 border-flag pl-3">{notice}</p>
         ) : (
           <p className="text-muted">
-            A place for longer work. Inspect reasoning maps a proof into steps and questions one of them. Discuss
-            with Hetu takes this draft into the conversation. Shortcut to inspect: Ctrl or ⌘ with Enter.
+            Get feedback sends your work to the conversation. Map the steps lays out a proof or derivation step by
+            step, so you can see what each step relies on. Shortcut: Ctrl or ⌘ with Enter.
           </p>
         )}
       </div>

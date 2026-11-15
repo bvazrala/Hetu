@@ -1,6 +1,6 @@
 import { useState, type RefObject } from 'react'
 import { MathText } from '../../components/MathText'
-import { toLinks } from '../../lib/graph'
+import { graphIsUseful, toLinks } from '../../lib/graph'
 import { TYPE_LABELS } from '../../lib/labels'
 import { toStringRange } from '../../lib/spans'
 import type { Observation, ReasoningNode } from '../../lib/types'
@@ -21,6 +21,8 @@ interface Props {
   headingRef: RefObject<HTMLHeadingElement | null>
   onInspect: () => void
   onRevise: (node: ReasoningNode) => void
+  /** Quotes the step in the conversation composer, for the student to ask about. */
+  onDiscuss: (node: ReasoningNode) => void
   onChallenge: (node: ReasoningNode, observation: Observation, reason: string) => void
 }
 
@@ -38,7 +40,7 @@ export function StructuredView(props: Props) {
         <p className="mx-auto mt-2 max-w-md text-sm text-muted">
           {stale
             ? 'The earlier feedback no longer matches what you wrote, so it is not shown.'
-            : 'Share a proof in the conversation, or write one in Freeform and select Inspect reasoning.'}
+            : 'Share a proof in the conversation, or write one in the Draft view and select Map the steps.'}
         </p>
         {stale && (
           <button
@@ -71,6 +73,7 @@ function AnalysisView({
   challengeError,
   headingRef,
   onRevise,
+  onDiscuss,
   onChallenge,
 }: Props & { inspection: Inspection }) {
   const { analysis, fallbackReason, challengeReason } = inspection
@@ -142,18 +145,21 @@ function AnalysisView({
         </div>
       )}
 
-      <section aria-labelledby="graph-heading">
-        <h3 id="graph-heading" className={sectionHeading}>
-          Reasoning graph
-        </h3>
-        <ReasoningGraph
-          nodes={analysis.nodes}
-          edges={analysis.edges}
-          flagged={flagged}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-        />
-      </section>
+      {/* A few loosely connected steps read better as the list below, which is always shown. */}
+      {graphIsUseful(analysis) && (
+        <section aria-labelledby="graph-heading">
+          <h3 id="graph-heading" className={sectionHeading}>
+            Reasoning graph
+          </h3>
+          <ReasoningGraph
+            nodes={analysis.nodes}
+            edges={analysis.edges}
+            flagged={flagged}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+          />
+        </section>
+      )}
 
       <section
         id="step-detail"
@@ -177,10 +183,11 @@ function AnalysisView({
             challenging={busy === 'challenge'}
             challengeError={challengeError}
             onRevise={() => onRevise(selected)}
+            onDiscuss={() => onDiscuss(selected)}
             onChallenge={(reason) => observation && onChallenge(selected, observation, reason)}
           />
         ) : (
-          <p className="text-sm">Select a step in the graph, or in the list below, to see what it relies on.</p>
+          <p className="text-sm">Select a step to see what it relies on.</p>
         )}
       </section>
 
