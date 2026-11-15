@@ -309,7 +309,11 @@
     padding-left: 1em;
     color: var(--color-muted);
   }
+  /* Prose may break a long word anywhere, so links never overflow a phone.
+     In a table that would let a column shrink to a few letters, so cells
+     wrap only between words, and a wide table scrolls inside the reply. */
   .hetu-prose table {
+    overflow-wrap: break-word;
     border-collapse: collapse;
     font-family: var(--font-sans);
     font-size: 0.95rem;
