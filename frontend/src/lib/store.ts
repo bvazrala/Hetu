@@ -91,7 +91,11 @@ function neonStore(): Store {
   return {
     async listConversations() {
       const rows = await attempt(() =>
-        db.from('conversations').select('id, title, updated_at').order('updated_at', { ascending: false }).limit(HISTORY_LIMIT),
+        db
+          .from('conversations')
+          .select('id, title, updated_at')
+          .order('updated_at', { ascending: false })
+          .limit(HISTORY_LIMIT),
       )
       return (rows ?? []) as ConversationSummary[]
     },
@@ -108,7 +112,12 @@ function neonStore(): Store {
     },
 
     async renameConversation(id, title) {
-      await attempt(() => db.from('conversations').update({ title: title.slice(0, MAX_TITLE_CHARS) }).eq('id', id))
+      await attempt(() =>
+        db
+          .from('conversations')
+          .update({ title: title.slice(0, MAX_TITLE_CHARS) })
+          .eq('id', id),
+      )
     },
 
     async deleteConversation(id) {
@@ -135,7 +144,9 @@ function neonStore(): Store {
 
     async saveNotes(conversationId, notes) {
       await attempt(() =>
-        db.from('learning_states').upsert({ conversation_id: conversationId, state: notes }, { onConflict: 'conversation_id' }),
+        db
+          .from('learning_states')
+          .upsert({ conversation_id: conversationId, state: notes }, { onConflict: 'conversation_id' }),
       )
     },
 

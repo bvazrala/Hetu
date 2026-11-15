@@ -64,7 +64,8 @@ describe('the conversation', () => {
     expect(hetu.querySelector('pre code')).toHaveTextContent('class Dog:')
     expect(hetu.querySelector('.katex')).not.toBeNull()
     expect(hetu.querySelector('.katex-display')).toBeNull()
-    expect(within(hetu).getByText('Programming')).toBeInTheDocument()
+    // The subject label is gone: it told the student nothing they needed.
+    expect(within(hetu).queryByText('Programming')).toBeNull()
     expect(field().value).toBe('')
   })
 
@@ -236,7 +237,6 @@ describe('a session', () => {
 
     render(<App />)
     expect(screen.getByRole('heading', { name: 'What are you working on?' })).toBeInTheDocument()
-    expect(screen.getByText(/conversation ends when you leave/)).toBeInTheDocument()
   })
 
   it('offers a conversation kept by an earlier version, and deletes it only when asked', async () => {
@@ -412,6 +412,21 @@ describe('the workspace and the conversation', () => {
 })
 
 describe('normalizeMath', () => {
+  it('keeps a displayed equation inline inside a table row, so the table stays whole', () => {
+    const table = '| Law | Formula |\n| --- | --- |\n| 2nd | $$F = ma$$ |\n| 3rd | \\[F_{AB} = -F_{BA}\\] |'
+    expect(normalizeMath(table)).toBe('| Law | Formula |\n| --- | --- |\n| 2nd | $F = ma$ |\n| 3rd | $F_{AB} = -F_{BA}$ |')
+  })
+
+  it('renders such a table with every row intact', async () => {
+    chat.mockResolvedValue(reply('| Law | Formula |\n| --- | --- |\n| 2nd | $$F = ma$$ |\n| 3rd | Equal and opposite |'))
+    render(<App />)
+    await say('Newton?')
+    const hetu = await screen.findByRole('article', { name: 'Hetu said' })
+    expect(hetu.querySelectorAll('tbody tr')).toHaveLength(2)
+    expect(hetu.querySelector('td .katex')).not.toBeNull()
+    expect(hetu.textContent).not.toContain('|')
+  })
+
   it('converts bracket delimiters to dollar delimiters', () => {
     expect(normalizeMath('So \\(x^2\\) holds.')).toBe('So $x^2$ holds.')
   })

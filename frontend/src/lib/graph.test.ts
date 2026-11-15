@@ -76,3 +76,18 @@ describe('layoutGraph', () => {
     expect(layoutGraph([], [])).toMatchObject({ nodes: [], links: [], height: 0 })
   })
 })
+
+describe('ordering within a row', () => {
+  it('places each step under the step it relies on, so arrows do not cross', () => {
+    const node = (id: string) => ({ id, type: 'claim' as const, text: id, span: null })
+    // a and b are on top. In the draft, the step that uses b comes first.
+    const nodes = ['a', 'b', 'from-b', 'from-a'].map(node)
+    const edges = [
+      { source: 'from-b', target: 'b', relation: 'depends_on' as const },
+      { source: 'from-a', target: 'a', relation: 'depends_on' as const },
+    ]
+    const placed = new Map(layoutGraph(nodes, edges).nodes.map((n) => [n.id, n.x]))
+    expect(placed.get('from-a')!).toBeLessThan(placed.get('from-b')!)
+    expect(placed.get('a')!).toBeLessThan(placed.get('b')!)
+  })
+})

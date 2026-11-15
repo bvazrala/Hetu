@@ -86,7 +86,10 @@ export function AuthDialog({ open, account, onClose, initialStep = 'sign-in' }: 
       )
     }
     if (step === 'forgot') {
-      void act(() => account.sendResetCode(email), () => go('reset', `If ${email} has an account, a code is on its way.`))
+      void act(
+        () => account.sendResetCode(email),
+        () => go('reset', `If ${email} has an account, a code is on its way.`),
+      )
     }
     if (step === 'reset') {
       void act(
@@ -105,7 +108,7 @@ export function AuthDialog({ open, account, onClose, initialStep = 'sign-in' }: 
       aria-labelledby="auth-title"
       onClose={onClose}
       onCancel={onClose}
-      className="m-auto w-[min(26rem,calc(100vw-2rem))] rounded-lg border border-rule bg-paper p-0 text-ink shadow-xl backdrop:bg-ink/30"
+      className="m-auto w-[min(26rem,calc(100vw-2rem))] rounded-lg border border-rule bg-paper p-0 text-ink shadow-xl backdrop:bg-backdrop"
     >
       <div className="px-6 pt-5 pb-6">
         <div className="flex items-start justify-between gap-4">
@@ -123,10 +126,30 @@ export function AuthDialog({ open, account, onClose, initialStep = 'sign-in' }: 
               An account keeps your conversations and workspace so you can come back to them.
             </p>
             <div className="mt-5 grid gap-2">
-              <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void act(() => account.signInWith('google'), () => {})}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={busy}
+                onClick={() =>
+                  void act(
+                    () => account.signInWith('google'),
+                    () => {},
+                  )
+                }
+              >
                 Continue with Google
               </button>
-              <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void act(() => account.signInWith('github'), () => {})}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={busy}
+                onClick={() =>
+                  void act(
+                    () => account.signInWith('github'),
+                    () => {},
+                  )
+                }
+              >
                 Continue with GitHub
               </button>
             </div>
@@ -139,12 +162,27 @@ export function AuthDialog({ open, account, onClose, initialStep = 'sign-in' }: 
         <form className="mt-2 space-y-3" onSubmit={submit} noValidate={false}>
           {step === 'sign-up' && (
             <Field label="Name (optional)" htmlFor="auth-name">
-              <input id="auth-name" autoComplete="name" maxLength={80} value={name} onChange={(e) => setName(e.target.value)} className="field py-2 font-sans text-base" />
+              <input
+                id="auth-name"
+                autoComplete="name"
+                maxLength={80}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="field py-2 font-sans text-base"
+              />
             </Field>
           )}
           {step !== 'reset' && step !== 'verify' && (
             <Field label="Email" htmlFor="auth-email">
-              <input id="auth-email" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className="field py-2 font-sans text-base" />
+              <input
+                id="auth-email"
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="field py-2 font-sans text-base"
+              />
             </Field>
           )}
           {needsCode && (
@@ -184,14 +222,22 @@ export function AuthDialog({ open, account, onClose, initialStep = 'sign-in' }: 
 
           <p aria-live="polite" className="min-h-5 text-sm">
             {message && (
-              <span className={message.tone === 'error' ? 'border-l-2 border-flag pl-2' : 'text-muted'}>{message.text}</span>
+              <span className={message.tone === 'error' ? 'border-l-2 border-flag pl-2' : 'text-muted'}>
+                {message.text}
+              </span>
             )}
           </p>
 
           <button type="submit" disabled={busy} className="btn btn-primary w-full">
             {busy
               ? 'One moment…'
-              : { 'sign-in': 'Sign in', 'sign-up': 'Create account', verify: 'Confirm email', forgot: 'Send a reset code', reset: 'Set password and sign in' }[step]}
+              : {
+                  'sign-in': 'Sign in',
+                  'sign-up': 'Create account',
+                  verify: 'Confirm email',
+                  forgot: 'Send a reset code',
+                  reset: 'Set password and sign in',
+                }[step]}
           </button>
         </form>
 
@@ -212,7 +258,17 @@ export function AuthDialog({ open, account, onClose, initialStep = 'sign-in' }: 
             </button>
           )}
           {step === 'verify' && (
-            <button type="button" className="text-muted underline underline-offset-4" disabled={busy} onClick={() => void act(() => account.sendVerificationCode(email), () => go('verify', 'A new code is on its way.'))}>
+            <button
+              type="button"
+              className="text-muted underline underline-offset-4"
+              disabled={busy}
+              onClick={() =>
+                void act(
+                  () => account.sendVerificationCode(email),
+                  () => go('verify', 'A new code is on its way.'),
+                )
+              }
+            >
               Send a new code
             </button>
           )}

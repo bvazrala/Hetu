@@ -25,7 +25,7 @@ export function HistoryPanel({ history, currentId, onOpen, onNew, onDeletedCurre
           New
         </button>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+      <div className="relative min-h-0 flex-1 overflow-y-auto px-2 pb-4">
         {history.error && <p className="mx-2 mb-2 border-l-2 border-flag pl-2 text-sm">{history.error}</p>}
         {history.items.length === 0 && !history.loading && !history.error && (
           <p className="mx-2 text-sm text-muted">Conversations you have while signed in are saved here.</p>

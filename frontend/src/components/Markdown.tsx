@@ -1,4 +1,5 @@
 import 'katex/dist/katex.min.css'
+import type React from 'react'
 import ReactMarkdown from 'react-markdown'
 import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
@@ -10,6 +11,15 @@ import { normalizeMath } from '../lib/math'
  * Raw HTML in the text is not rendered, so a reply cannot inject markup.
  */
 export function Markdown({ text }: { text: string }) {
+  // Headings inside a reply sit below the page's own headings: the reply's
+  // top level becomes h4 and anything deeper h5, whichever levels it used.
+  const levels = [...text.matchAll(/^(#{1,6})\s/gm)].map((match) => match[1].length)
+  const top = levels.length > 0 ? Math.min(...levels) : 1
+  const heading = (level: number) =>
+    function Heading({ children }: { children?: React.ReactNode }) {
+      return level <= top ? <h4>{children}</h4> : <h5>{children}</h5>
+    }
+
   return (
     <div className="hetu-prose">
       <ReactMarkdown
@@ -28,13 +38,12 @@ export function Markdown({ text }: { text: string }) {
             </div>
           ),
           pre: ({ children }) => <pre tabIndex={0}>{children}</pre>,
-          // Headings inside a reply sit below the page's own headings.
-          h1: ({ children }) => <h4>{children}</h4>,
-          h2: ({ children }) => <h4>{children}</h4>,
-          h3: ({ children }) => <h4>{children}</h4>,
-          h4: ({ children }) => <h5>{children}</h5>,
-          h5: ({ children }) => <h5>{children}</h5>,
-          h6: ({ children }) => <h5>{children}</h5>,
+          h1: heading(1),
+          h2: heading(2),
+          h3: heading(3),
+          h4: heading(4),
+          h5: heading(5),
+          h6: heading(6),
         }}
       >
         {normalizeMath(text)}

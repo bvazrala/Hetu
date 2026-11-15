@@ -47,7 +47,7 @@ export function StructuredView(props: Props) {
             type="button"
             onClick={onInspect}
             disabled={busy !== null}
-            className="mt-5 rounded-md bg-accent px-5 py-2.5 font-medium text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-rule disabled:text-muted"
+            className="btn btn-primary mt-5"
           >
             {busy === 'inspect' ? 'Inspecting…' : 'Inspect current draft'}
           </button>
@@ -263,7 +263,6 @@ function AnalysisView({
                       Relies on {prerequisites.length === 1 ? 'step' : 'steps'} {prerequisites.join(', ')}
                     </p>
                   )}
-                  {node.span === null && <p>Not matched to exact text in your draft.</p>}
                   {observation && flagged.has(node.id) && (
                     <p className="text-ink">
                       <span className="font-medium">Question: </span>

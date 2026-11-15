@@ -15,7 +15,15 @@ interface Props {
 }
 
 /** The signed-in student's profile, sign-out, and deletion of their data. */
-export function AccountDialog({ open, account, store, displayName, onDisplayNameChange, onClose, onDataDeleted }: Props) {
+export function AccountDialog({
+  open,
+  account,
+  store,
+  displayName,
+  onDisplayNameChange,
+  onClose,
+  onDataDeleted,
+}: Props) {
   const dialog = useRef<HTMLDialogElement>(null)
   const [name, setName] = useState(displayName ?? '')
   const [confirming, setConfirming] = useState(false)
@@ -70,7 +78,7 @@ export function AccountDialog({ open, account, store, displayName, onDisplayName
       aria-labelledby="account-title"
       onClose={onClose}
       onCancel={onClose}
-      className="m-auto w-[min(28rem,calc(100vw-2rem))] rounded-lg border border-rule bg-paper p-0 text-ink shadow-xl backdrop:bg-ink/30"
+      className="m-auto w-[min(28rem,calc(100vw-2rem))] rounded-lg border border-rule bg-paper p-0 text-ink shadow-xl backdrop:bg-backdrop"
     >
       <div className="space-y-5 px-6 pt-5 pb-6">
         <div className="flex items-start justify-between gap-4">
@@ -136,7 +144,12 @@ export function AccountDialog({ open, account, store, displayName, onDisplayName
               <button type="button" className="btn btn-secondary btn-small" disabled={busy} onClick={deleteEverything}>
                 {busy ? 'Deleting…' : 'Delete everything'}
               </button>
-              <button type="button" className="btn btn-quiet btn-small" disabled={busy} onClick={() => setConfirming(false)}>
+              <button
+                type="button"
+                className="btn btn-quiet btn-small"
+                disabled={busy}
+                onClick={() => setConfirming(false)}
+              >
                 Cancel
               </button>
             </div>

@@ -62,17 +62,26 @@ const CODE = /(```[\s\S]*?```|`[^`\n]*`)/
  * Models write math as $...$, $$...$$, \(...\), or \[...\]. The plugin reads
  * only the dollar forms, and it treats $$...$$ as a displayed equation only
  * when the dollar signs sit on their own lines. Both are adjusted here.
+ *
+ * A table row must stay on one line, so a displayed equation inside one is
+ * made inline instead. Otherwise the rest of the table falls apart.
  */
 export function normalizeMath(text: string): string {
   // One pass for both display forms, so an equation is never wrapped twice.
   const display = (_: string, bracket?: string, dollars?: string) =>
     `\n\n$$\n${(bracket ?? dollars ?? '').trim()}\n$$\n\n`
+  const inline = (_: string, bracket?: string, dollars?: string) => `$${(bracket ?? dollars ?? '').trim()}$`
+  const inTableRows = (part: string) =>
+    part
+      .split('\n')
+      .map((line) => (line.trimStart().startsWith('|') ? line.replace(/\\\[(.+?)\\\]|\$\$(.+?)\$\$/g, inline) : line))
+      .join('\n')
   return text
     .split(CODE)
     .map((part, index) =>
       index % 2 === 1
         ? part
-        : part
+        : inTableRows(part)
             .replace(/\\\[([\s\S]+?)\\\]|\$\$([\s\S]+?)\$\$/g, display)
             .replace(/\\\(([\s\S]+?)\\\)/g, (_, math: string) => `$${math}$`),
     )

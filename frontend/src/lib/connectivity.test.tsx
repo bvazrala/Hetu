@@ -26,7 +26,7 @@ describe('backend status', () => {
     const { BackendStatus } = await loadMonitor(async () => true)
     render(<BackendStatus />)
     await advance(0)
-    expect(screen.getByRole('status')).toHaveTextContent('API: connected')
+    expect(screen.getByRole('status')).toHaveTextContent(/^$/)
   })
 
   it('recovers after a long outage instead of giving up', async () => {
@@ -35,15 +35,15 @@ describe('backend status', () => {
     render(<BackendStatus />)
 
     await advance(0)
-    expect(screen.getByRole('status')).toHaveTextContent('API: connecting')
+    expect(screen.getByRole('status')).toHaveTextContent('Connecting to Hetu')
 
     // Well past the point where the old monitor stopped checking.
     await advance(5 * 60_000)
-    expect(screen.getByRole('status')).toHaveTextContent('API: not reachable')
+    expect(screen.getByRole('status')).toHaveTextContent('cannot reach its server')
 
     healthy = true
     await advance(20_000)
-    expect(screen.getByRole('status')).toHaveTextContent('API: connected')
+    expect(screen.getByRole('status')).toHaveTextContent(/^$/)
   })
 
   it('notices when a healthy server goes away', async () => {
@@ -54,17 +54,17 @@ describe('backend status', () => {
 
     healthy = false
     await advance(60_000)
-    expect(screen.getByRole('status')).toHaveTextContent('API: connecting')
+    expect(screen.getByRole('status')).toHaveTextContent('Connecting to Hetu')
   })
 
   it('follows real requests, not only its own checks', async () => {
     const { BackendStatus, notify } = await loadMonitor(async () => false)
     render(<BackendStatus />)
     await advance(0)
-    expect(screen.getByRole('status')).toHaveTextContent('API: connecting')
+    expect(screen.getByRole('status')).toHaveTextContent('Connecting to Hetu')
 
     // An analysis request just got an answer from the server.
     await notify(true)
-    expect(screen.getByRole('status')).toHaveTextContent('API: connected')
+    expect(screen.getByRole('status')).toHaveTextContent(/^$/)
   })
 })

@@ -20,7 +20,12 @@ function ok<T>(data: T) {
 }
 
 vi.mock('../../lib/neon', () => {
-  const user = (email: string): AuthUser => ({ id: `id-${email}`, email, name: email.split('@')[0], emailVerified: true })
+  const user = (email: string): AuthUser => ({
+    id: `id-${email}`,
+    email,
+    name: email.split('@')[0],
+    emailVerified: true,
+  })
   const auth = {
     getSession: () => ok(authState.user ? { user: authState.user, session: { token: 'jwt' } } : null),
     signIn: {
@@ -82,7 +87,17 @@ vi.mock('../../lib/neon', () => {
 
 // An in-memory stand-in for the Data API, with one space per user.
 const db = vi.hoisted(() => ({
-  conversations: new Map<string, { owner: string; title: string; intent: string | null; messages: StoredMessage[]; notes: LearningState | null; updated: number }>(),
+  conversations: new Map<
+    string,
+    {
+      owner: string
+      title: string
+      intent: string | null
+      messages: StoredMessage[]
+      notes: LearningState | null
+      updated: number
+    }
+  >(),
   workspaces: new Map<string, StoredWorkspace>(),
   names: new Map<string, string | null>(),
   failing: false,
@@ -101,7 +116,11 @@ vi.mock('../../lib/store', async (original) => {
       return [...db.conversations.entries()]
         .filter(([, c]) => c.owner === owner())
         .sort((a, b) => b[1].updated - a[1].updated)
-        .map(([id, c]): ConversationSummary => ({ id, title: c.title, updated_at: new Date(2026, 10, 15).toISOString() }))
+        .map(([id, c]): ConversationSummary => ({
+          id,
+          title: c.title,
+          updated_at: new Date(2026, 10, 15).toISOString(),
+        }))
     },
     async createConversation(title, intent) {
       guard()
@@ -177,7 +196,15 @@ const NOTES: LearningState = {
 }
 
 function reply(text: string, extra: Partial<ChatResponse> = {}): ChatResponse {
-  return { reply: text, action: 'explain', specialists: [], learning_state: NOTES, inspection: null, checks: [], ...extra }
+  return {
+    reply: text,
+    action: 'explain',
+    specialists: [],
+    learning_state: NOTES,
+    inspection: null,
+    checks: [],
+    ...extra,
+  }
 }
 
 const field = () => screen.getByLabelText<HTMLTextAreaElement>('Message Hetu')
@@ -187,8 +214,10 @@ async function say(text: string) {
   await userEvent.click(screen.getByRole('button', { name: 'Send' }))
 }
 
+const header = () => within(screen.getByRole('banner'))
+
 async function signIn(email = 'ada@example.com') {
-  await userEvent.click(await screen.findByRole('button', { name: 'Sign in' }))
+  await userEvent.click(await header().findByRole('button', { name: 'Sign in' }))
   const dialog = screen.getByRole('dialog', { name: 'Sign in to Hetu' })
   await userEvent.clear(within(dialog).getByLabelText('Email'))
   await userEvent.type(within(dialog).getByLabelText('Email'), email)
@@ -206,7 +235,7 @@ async function openHistory() {
 async function signOut() {
   await userEvent.click(screen.getByRole('button', { name: /^Account:/ }))
   await userEvent.click(screen.getByRole('button', { name: 'Sign out' }))
-  await screen.findByRole('button', { name: 'Sign in' })
+  await header().findByRole('button', { name: 'Sign in' })
 }
 
 beforeEach(() => {
@@ -236,7 +265,7 @@ describe('a signed-in student', () => {
     expect(saved.messages.map((m) => m.role)).toEqual(['student', 'hetu'])
     expect(saved.messages[1].meta).toMatchObject({ action: 'explain' })
     await vi.waitFor(() => expect(saved.notes?.topic).toBe('classes'))
-    expect(screen.getByText('Saved to your account.')).toBeInTheDocument()
+    expect(header().getByTitle('Saved to your account.')).toHaveTextContent('Saved')
 
     await signOut()
     // Nothing from the account stays on screen after sign-out.
@@ -317,7 +346,9 @@ describe('a signed-in student', () => {
     await signIn()
     await userEvent.click(screen.getByRole('button', { name: 'Workspace' }))
     await userEvent.type(screen.getByLabelText('Your work'), 'Assume n is odd.')
-    await vi.waitFor(() => expect(db.workspaces.get('id-ada@example.com')?.draft).toBe('Assume n is odd.'), { timeout: 3000 })
+    await vi.waitFor(() => expect(db.workspaces.get('id-ada@example.com')?.draft).toBe('Assume n is odd.'), {
+      timeout: 3000,
+    })
     expect(screen.getByText('Saved to your account')).toBeInTheDocument()
 
     await signOut()
@@ -325,7 +356,16 @@ describe('a signed-in student', () => {
     expect(screen.getByLabelText<HTMLTextAreaElement>('Your work').value).toBe('')
 
     await signIn()
-    await vi.waitFor(() => expect(screen.getByLabelText<HTMLTextAreaElement>('Your work').value).toBe('Assume n is odd.'))
+    await vi.waitFor(() =>
+      expect(screen.getByLabelText<HTMLTextAreaElement>('Your work').value).toBe('Assume n is odd.'),
+    )
+  })
+
+  it('does not write an empty workspace just by signing in', async () => {
+    render(<App />)
+    await signIn()
+    await new Promise((resolve) => setTimeout(resolve, 1200))
+    expect(db.workspaces.size).toBe(0)
   })
 
   it('can change their display name and delete their data', async () => {
@@ -349,11 +389,31 @@ describe('a signed-in student', () => {
   })
 })
 
+describe('the first screen', () => {
+  it('offers a signed-in student their recent conversations', async () => {
+    chat.mockResolvedValue(reply('Okay.'))
+    render(<App />)
+    await signIn()
+    await say('Recent question.')
+    await vi.waitFor(() => expect(db.conversations.size).toBe(1))
+    await userEvent.click(header().getByRole('button', { name: 'New' }))
+
+    const recent = await screen.findByRole('region', { name: 'Continue where you left off' })
+    await userEvent.click(within(recent).getByRole('button', { name: /Recent question/ }))
+    expect(await screen.findByText('Okay.')).toBeInTheDocument()
+  })
+
+  it('tells a guest that nothing is saved, with a way to sign in', async () => {
+    render(<App />)
+    expect(await screen.findByText(/As a guest, nothing is saved/)).toBeInTheDocument()
+  })
+})
+
 describe('a guest who signs in', () => {
   it('is asked before their conversation goes into the account, and can say no', async () => {
     chat.mockResolvedValue(reply('Okay.'))
     render(<App />)
-    await screen.findByRole('button', { name: 'Sign in' })
+    await header().findByRole('button', { name: 'Sign in' })
     await say('A guest question.')
     await screen.findByText('Okay.')
     await signIn()
@@ -362,13 +422,13 @@ describe('a guest who signs in', () => {
     await userEvent.click(within(ask).getByRole('button', { name: 'Keep it in this tab only' }))
     await new Promise((resolve) => setTimeout(resolve, 400))
     expect(db.conversations.size).toBe(0)
-    expect(screen.getByText('Kept in this tab only.')).toBeInTheDocument()
+    expect(header().getByTitle('You chose to keep this conversation in this tab only.')).toHaveTextContent('Not saved')
   })
 
   it('can save the guest conversation to the new account', async () => {
     chat.mockResolvedValue(reply('Okay.'))
     render(<App />)
-    await screen.findByRole('button', { name: 'Sign in' })
+    await header().findByRole('button', { name: 'Sign in' })
     await say('A guest question.')
     await screen.findByText('Okay.')
     await signIn()
@@ -382,7 +442,7 @@ describe('signing in', () => {
   it('confirms the email with a code when the account is not verified yet', async () => {
     authState.failNextSignIn = { code: 'EMAIL_NOT_VERIFIED', message: 'Email not verified' }
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: 'Sign in' }))
+    await userEvent.click(await header().findByRole('button', { name: 'Sign in' }))
     let dialog = screen.getByRole('dialog', { name: 'Sign in to Hetu' })
     await userEvent.type(within(dialog).getByLabelText('Email'), 'new@example.com')
     await userEvent.type(within(dialog).getByLabelText('Password'), 'long enough')
@@ -403,7 +463,7 @@ describe('signing in', () => {
   it('creates an account and asks for the emailed code when confirmation is required', async () => {
     authState.verified = false
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: 'Sign in' }))
+    await userEvent.click(await header().findByRole('button', { name: 'Sign in' }))
     await userEvent.click(screen.getByRole('button', { name: 'Create an account' }))
     const dialog = screen.getByRole('dialog', { name: 'Create an account' })
     await userEvent.type(within(dialog).getByLabelText('Email'), 'sam@example.com')
@@ -415,7 +475,7 @@ describe('signing in', () => {
 
   it('resets a forgotten password with an emailed code and signs in', async () => {
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: 'Sign in' }))
+    await userEvent.click(await header().findByRole('button', { name: 'Sign in' }))
     await userEvent.click(screen.getByRole('button', { name: 'Forgot your password?' }))
     let dialog = screen.getByRole('dialog', { name: 'Reset your password' })
     await userEvent.type(within(dialog).getByLabelText('Email'), 'ada@example.com')
@@ -427,12 +487,16 @@ describe('signing in', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Set password and sign in' }))
 
     expect(await screen.findByRole('button', { name: 'Account: ada' })).toBeInTheDocument()
-    expect(authState.calls).toEqual(['forgot:ada@example.com', 'reset:ada@example.com:654321', 'signIn:ada@example.com'])
+    expect(authState.calls).toEqual([
+      'forgot:ada@example.com',
+      'reset:ada@example.com:654321',
+      'signIn:ada@example.com',
+    ])
   })
 
   it('starts Google and GitHub sign-in with a return address on this site', async () => {
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: 'Sign in' }))
+    await userEvent.click(await header().findByRole('button', { name: 'Sign in' }))
     await userEvent.click(screen.getByRole('button', { name: 'Continue with GitHub' }))
     expect(authState.socialOptions).toEqual({ provider: 'github', callbackURL: window.location.origin + '/' })
   })
@@ -440,7 +504,7 @@ describe('signing in', () => {
   it('shows a clear message for a wrong password', async () => {
     authState.failNextSignIn = { code: 'INVALID_EMAIL_OR_PASSWORD', message: 'Invalid' }
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: 'Sign in' }))
+    await userEvent.click(await header().findByRole('button', { name: 'Sign in' }))
     const dialog = screen.getByRole('dialog', { name: 'Sign in to Hetu' })
     await userEvent.type(within(dialog).getByLabelText('Email'), 'ada@example.com')
     await userEvent.type(within(dialog).getByLabelText('Password'), 'wrong')

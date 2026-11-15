@@ -3,7 +3,7 @@ import { BackendStatus } from '../../components/BackendStatus'
 import { Markdown } from '../../components/Markdown'
 import { MAX_MESSAGE_CHARS } from '../../lib/api'
 import { graphIsUseful } from '../../lib/graph'
-import type { Assist, ProofInspection, Specialist, WorkspaceContext } from '../../lib/types'
+import type { Assist, ProofInspection, WorkspaceContext } from '../../lib/types'
 import { SessionNotes } from './SessionNotes'
 import type { ConversationState, Turn } from './useConversation'
 import { STARTS } from './starts'
@@ -16,18 +16,10 @@ interface Props {
   /** Opens a proof inspection from the conversation in the workspace. */
   onOpenInspection: (inspection: ProofInspection) => void
   onOpenWorkspace: () => void
-  /** Messages about saving and accounts, shown above the conversation. */
+  /** Messages about saving and accounts, shown above the composer. */
   notices?: ReactNode[]
-  /** Where this conversation is kept, in a few words. */
-  saveNote?: string
-}
-
-const SPECIALIST_LABELS: Record<Specialist, string> = {
-  mathematics: 'Mathematics',
-  science: 'Science',
-  programming: 'Programming',
-  humanities: 'Writing and humanities',
-  logic: 'Logic',
+  /** Extra content for the first screen, such as recent conversations. */
+  welcomeExtras?: ReactNode
 }
 
 /** The kinds of help a student can ask for, in the order the composer lists them. */
@@ -72,14 +64,21 @@ function followUpsFor(action: string | undefined): Assist[] {
   }
 }
 
-export function Conversation({ conversation, workspace, onOpenInspection, onOpenWorkspace, notices = [], saveNote }: Props) {
+export function Conversation({
+  conversation,
+  workspace,
+  onOpenInspection,
+  onOpenWorkspace,
+  notices = [],
+  welcomeExtras,
+}: Props) {
   const { turns, notes, intent, input, setInput, assist, setAssist, busy, error, loading } = conversation
   const end = useRef<HTMLDivElement>(null)
   const field = useRef<HTMLTextAreaElement>(null)
 
   // Keep the newest message in view. scrollIntoView is missing in some test environments.
   useEffect(() => {
-    if (turns.length > 0 || busy) end.current?.scrollIntoView?.({ block: 'end' })
+    if (turns.length > 0 || busy) end.current?.scrollIntoView?.({ block: 'nearest' })
   }, [turns.length, busy])
 
   // Something outside the composer asked for the cursor, such as "Ask about the selection".
@@ -106,12 +105,13 @@ export function Conversation({ conversation, workspace, onOpenInspection, onOpen
 
   const latest = turns.at(-1)
   const followUps = !busy && !error && latest?.role === 'hetu' ? followUpsFor(latest.action) : []
-  const placeholder = STARTS.find((start) => start.intent === intent)?.placeholder ?? 'Ask a question, or share what you are working on'
+  const placeholder =
+    STARTS.find((start) => start.intent === intent)?.placeholder ?? 'Ask a question, or share what you are working on'
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
-        <div className="mx-auto w-full max-w-3xl px-5 pt-6 pb-8 sm:px-8">
+      <div className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+        <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col px-5 pt-6 pb-8 sm:px-8">
           {loading ? (
             <p aria-live="polite" className="py-10 text-muted">
               Opening the conversation…
@@ -121,7 +121,9 @@ export function Conversation({ conversation, workspace, onOpenInspection, onOpen
               {error}
             </p>
           ) : turns.length === 0 ? (
-            <Welcome intent={intent} onChoose={conversation.chooseIntent} onOpenWorkspace={onOpenWorkspace} />
+            <Welcome intent={intent} onChoose={conversation.chooseIntent} onOpenWorkspace={onOpenWorkspace}>
+              {welcomeExtras}
+            </Welcome>
           ) : (
             <>
               <h2 className="sr-only">Conversation</h2>
@@ -176,9 +178,12 @@ export function Conversation({ conversation, workspace, onOpenInspection, onOpen
       </div>
 
       <div className="border-t border-rule bg-paper">
+        <BackendStatus className="mx-auto w-full max-w-3xl px-5 pt-3 text-sm sm:px-8" />
         {/* Notices sit by the composer, so they are seen however far the conversation has scrolled. */}
         {notices.length > 0 && (
-          <div className="mx-auto max-h-[40vh] w-full max-w-3xl space-y-2 overflow-y-auto px-5 pt-3 sm:px-8">{notices}</div>
+          <div className="mx-auto max-h-[40vh] w-full max-w-3xl space-y-2 overflow-y-auto px-5 pt-3 sm:px-8">
+            {notices}
+          </div>
         )}
         <form
           className="mx-auto w-full max-w-3xl px-5 pt-3 pb-3 sm:px-8"
@@ -201,6 +206,7 @@ export function Conversation({ conversation, workspace, onOpenInspection, onOpen
               onKeyDown={submitOnEnter}
               placeholder={placeholder}
               aria-describedby="message-hint"
+              enterKeyHint="send"
               className="block max-h-60 min-h-14 w-full [field-sizing:content] resize-none bg-transparent px-4 pt-3 pb-1 font-serif text-lg leading-relaxed outline-none placeholder:text-muted focus-visible:outline-none"
             />
             <div className="flex flex-wrap items-center gap-2 px-2 pb-2">
@@ -230,19 +236,18 @@ export function Conversation({ conversation, workspace, onOpenInspection, onOpen
                   Include my workspace
                 </label>
               )}
-              <button type="submit" disabled={busy || loading || input.trim() === ''} className="btn btn-primary ml-auto">
+              <button
+                type="submit"
+                disabled={busy || loading || input.trim() === ''}
+                className="btn btn-primary ml-auto"
+              >
                 Send
               </button>
             </div>
           </div>
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-muted">
-            <span id="message-hint">Enter to send. Shift with Enter for a new line.</span>
-            <span className="flex flex-wrap items-center gap-x-3">
-              {saveNote && <span>{saveNote}</span>}
-              <span>Hetu can be wrong.</span>
-              <BackendStatus />
-            </span>
-          </div>
+          <p id="message-hint" className="sr-only">
+            Enter sends. Shift and Enter add a new line.
+          </p>
         </form>
       </div>
     </div>
@@ -290,7 +295,10 @@ function Message({
   if (turn.role === 'student') {
     const asked = ASSIST_OPTIONS.find((option) => option.value === turn.assist)
     return (
-      <article aria-label="You said" className="ml-auto w-fit max-w-[92%] rounded-lg border border-rule bg-surface px-4 py-3 sm:max-w-[85%]">
+      <article
+        aria-label="You said"
+        className="ml-auto w-fit max-w-[92%] rounded-lg border border-rule bg-surface px-4 py-3 sm:max-w-[85%]"
+      >
         <h3 className="eyebrow">You</h3>
         <StudentText text={turn.content} />
         {(asked || turn.workspace || turn.workspaceIncluded) && (
@@ -304,7 +312,6 @@ function Message({
     )
   }
 
-  const specialists = (turn.specialists ?? []).map((name) => SPECIALIST_LABELS[name]).filter(Boolean)
   return (
     <article aria-label="Hetu said">
       <h3 className="eyebrow mb-1 text-accent">Hetu</h3>
@@ -321,9 +328,9 @@ function Message({
         </div>
       )}
 
-      {turn.inspection && <InspectionCard inspection={turn.inspection} workspace={workspace} onOpen={onOpenInspection} />}
-
-      {specialists.length > 0 && <p className="mt-3 text-xs text-muted">{specialists.join(' · ')}</p>}
+      {turn.inspection && (
+        <InspectionCard inspection={turn.inspection} workspace={workspace} onOpen={onOpenInspection} />
+      )}
     </article>
   )
 }

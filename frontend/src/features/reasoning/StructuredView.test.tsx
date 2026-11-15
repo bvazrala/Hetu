@@ -195,3 +195,17 @@ describe('when there is no current analysis', () => {
     expect(onInspect).toHaveBeenCalled()
   })
 })
+
+describe('zoom', () => {
+  it('starts fitted and can zoom out and back in', async () => {
+    show(inspectionOf(LIVE_ANALYSIS))
+    const zoom = screen.getByRole('group', { name: 'Zoom' })
+    expect(within(zoom).getByRole('button', { name: 'Fit' })).toHaveAttribute('aria-pressed', 'true')
+    expect(zoom).toHaveTextContent('100%')
+    await userEvent.click(within(zoom).getByRole('button', { name: 'Zoom out' }))
+    expect(zoom).toHaveTextContent('90%')
+    expect(within(zoom).getByRole('button', { name: 'Fit' })).toHaveAttribute('aria-pressed', 'false')
+    await userEvent.click(within(zoom).getByRole('button', { name: 'Zoom in' }))
+    expect(zoom).toHaveTextContent('100%')
+  })
+})

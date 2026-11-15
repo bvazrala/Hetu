@@ -118,6 +118,8 @@ export function useWorkspace(store: Store | null = null) {
         if (stored && latest.current.problem === '' && latest.current.draft === '') {
           replaceWorkspace(stored.problem, stored.draft, false)
         }
+        // What is on screen now matches the account, so there is nothing to save yet.
+        lastSaved.current = JSON.stringify({ problem: latest.current.problem, draft: latest.current.draft })
         setLoaded(true)
         setSave('saved')
       })

@@ -8,7 +8,19 @@
       name="description"
       content="Hetu is a learning companion that helps students understand ideas and reason through them in any subject."
     />
+    <meta name="theme-color" content="#f7f4ec" />
     <title>Hetu</title>
+    <script>
+      // Sets the theme before the page draws, so a dark page never flashes light.
+      // The choice is "light", "dark", or absent for the system setting.
+      try {
+        var choice = localStorage.getItem('hetu.theme')
+        var dark = choice === 'dark' || (choice !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+      } catch (error) {
+        document.documentElement.dataset.theme = 'light'
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

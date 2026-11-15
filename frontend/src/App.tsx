@@ -14,6 +14,9 @@ import { setTokenProvider } from './lib/api'
 import { accessToken } from './lib/neon'
 import { store as accountStore } from './lib/store'
 import { useMediaQuery } from './lib/useMediaQuery'
+import { useTheme } from './lib/useTheme'
+import { Logo } from './components/Logo'
+import { ThemeToggle } from './components/ThemeToggle'
 
 // A signed-in student's requests count against their own account's limit.
 setTokenProvider(accessToken)
@@ -27,13 +30,14 @@ function quote(text: string): string {
     .join('\n')
 }
 
-const CONVERSATION_SAVE: Record<SaveState, string> = {
-  off: 'Not saved. A guest conversation ends when you leave.',
-  local: 'Kept in this tab only.',
-  ask: 'Not saved yet.',
-  saving: 'Saving…',
-  saved: 'Saved to your account.',
-  error: 'Not saved.',
+// One quiet word in the header. The title explains it on hover.
+const SAVE_WORD: Record<SaveState, [string, string] | null> = {
+  off: ['Not saved', 'Guest conversations end when you leave. Sign in to keep them.'],
+  local: ['Not saved', 'You chose to keep this conversation in this tab only.'],
+  ask: ['Not saved', 'Choose below whether to save this conversation to your account.'],
+  saving: ['Saving…', 'Saving to your account.'],
+  saved: ['Saved', 'Saved to your account.'],
+  error: ['Not saved', 'Saving is unavailable right now. Your work stays in this tab.'],
 }
 
 const WORKSPACE_SAVE: Record<WorkspaceSave, string> = {
@@ -52,6 +56,7 @@ const WORKSPACE_SAVE: Record<WorkspaceSave, string> = {
  */
 export default function App() {
   const account = useAccount()
+  const theme = useTheme()
   const signedIn = account.status === 'signed-in'
   const store = signedIn ? accountStore : null
 
@@ -83,7 +88,11 @@ export default function App() {
   // When a new analysis is shown, keyboard and screen reader users should land on it.
   const resultHeading = useRef<HTMLHeadingElement>(null)
   useEffect(() => {
-    if (workspace.resultVersion > 0) resultHeading.current?.focus()
+    // Focus without scrolling anything else, then bring the panel to its top.
+    const heading = resultHeading.current
+    if (workspace.resultVersion === 0 || !heading) return
+    heading.focus({ preventScroll: true })
+    heading.closest('[data-scroll]')?.scrollTo?.({ top: 0 })
   }, [workspace.resultVersion])
 
   const draft = workspace.draft.trim() === '' ? null : { problem: workspace.problem, draft: workspace.draft }
@@ -186,15 +195,50 @@ export default function App() {
     )
   }
 
-  const saveNote =
-    account.status === 'disabled'
-      ? 'Not saved. A conversation ends when you leave.'
-      : conversation.saveState === 'off'
-        ? 'Not saved. Sign in to keep your conversations.'
-        : CONVERSATION_SAVE[conversation.saveState]
+  const saveWord = conversation.turns.length > 0 ? SAVE_WORD[conversation.saveState] : null
+
+  // Under the starting points: a way back into recent work, or how saving works.
+  const recent = history.items.slice(0, 3)
+  // On wide screens the sidebar already lists them, so they are not repeated.
+  const welcomeExtras = signedIn ? (
+    recent.length > 0 &&
+    !sideBySide && (
+      <section aria-labelledby="recent-heading" className="mt-8">
+        <h3 id="recent-heading" className="eyebrow">
+          Continue where you left off
+        </h3>
+        <ul role="list" className="mt-2 divide-y divide-rule rounded-lg border border-rule bg-surface">
+          {recent.map((item) => (
+            <li key={item.id}>
+              <button
+                type="button"
+                onClick={() => void conversation.open(item.id)}
+                className="flex w-full items-baseline justify-between gap-4 px-4 py-3 text-left hover:bg-accent-soft"
+              >
+                <span className="truncate">{item.title}</span>
+                <span className="shrink-0 text-xs text-muted">{recentDate.format(new Date(item.updated_at))}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )
+  ) : account.status === 'guest' ? (
+    <p className="mt-6 text-sm text-muted">
+      As a guest, nothing is saved.{' '}
+      <button
+        type="button"
+        className="font-medium text-accent underline underline-offset-4"
+        onClick={() => setAuthOpen(true)}
+      >
+        Sign in
+      </button>{' '}
+      to keep your conversations and come back to them.
+    </p>
+  ) : null
 
   return (
-    <div className="flex h-dvh flex-col">
+    <div className="flex h-dvh flex-col overflow-clip">
       <a
         href="#main"
         className="sr-only rounded-md bg-surface px-4 py-2 font-medium text-accent focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-10"
@@ -202,9 +246,15 @@ export default function App() {
         Skip to main content
       </a>
       <header className="border-b border-rule">
-        <div className="flex items-center gap-2 px-5 py-3 sm:gap-3 sm:px-8">
-          <h1 className="font-serif text-2xl font-semibold tracking-tight">Hetu</h1>
-          <span className="hidden text-sm text-muted md:inline">A companion for learning to reason</span>
+        <div className="flex h-14 items-center gap-2 px-4 sm:gap-3 sm:px-6">
+          <h1 className="shrink-0">
+            <Logo className="h-6 w-auto sm:h-7" />
+          </h1>
+          {saveWord && (
+            <span role="status" title={saveWord[1]} className="hidden truncate text-xs text-muted sm:inline">
+              {saveWord[0]}
+            </span>
+          )}
           <div className="ml-auto flex items-center gap-1 sm:gap-2">
             {signedIn && !sideBySide && (
               <button
@@ -244,10 +294,10 @@ export default function App() {
             >
               Workspace
             </button>
+            <ThemeToggle choice={theme.choice} onCycle={theme.cycle} />
             {signedIn ? (
               <button type="button" className="btn btn-quiet btn-small max-w-40" onClick={() => setAccountOpen(true)}>
-                <span className="sr-only">Account:</span>{' '}
-                <span className="truncate">{name}</span>
+                <span className="sr-only">Account:</span> <span className="truncate">{name}</span>
               </button>
             ) : (
               account.status !== 'disabled' && (
@@ -265,7 +315,7 @@ export default function App() {
         </div>
       </header>
 
-      <main id="main" tabIndex={-1} className="flex min-h-0 flex-1">
+      <main id="main" tabIndex={-1} className="flex min-h-0 flex-1 overflow-clip">
         {showHistory && (
           <div id="history" className="flex min-h-0 w-full flex-col border-rule lg:w-64 lg:shrink-0 lg:border-r">
             <HistoryPanel
@@ -289,7 +339,7 @@ export default function App() {
             conversation={conversation}
             workspace={draft}
             notices={notices}
-            saveNote={saveNote}
+            welcomeExtras={welcomeExtras}
             onOpenInspection={workspace.openInspection}
             onOpenWorkspace={() => workspace.setPanel('draft')}
           />
@@ -363,6 +413,8 @@ export default function App() {
     </div>
   )
 }
+
+const recentDate = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' })
 
 function Notice({ title, children }: { title: string; children: ReactNode }) {
   return (

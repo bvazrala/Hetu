@@ -7,7 +7,13 @@
  *   paper    page background        surface  raised areas: messages, fields, cards
  *   ink      body text              muted    supporting text, labels
  *   rule     borders and dividers   accent   actions, links, Hetu's name, focus
+ *   on-accent  text on an accent fill
  *   flag     a step Hetu questions. Always paired with text or a label, never color alone.
+ *   backdrop   the dimmed page behind a dialog
+ *   logo-*     the three parts of the wordmark
+ *
+ * Every color in the app comes from these. The dark theme replaces the
+ * values below, so nothing needs its own dark styling.
  *
  * Type
  *   serif  learning content: Hetu's replies, the student's own words and work
@@ -29,6 +35,11 @@
      green: a question is not an error, and no step is marked as verified. */
   --color-flag: #7c4a03;
   --color-flag-soft: #f7ecd4;
+  --color-on-accent: #ffffff;
+  --color-backdrop: rgb(31 36 32 / 0.35);
+  --color-logo-ink: #132b1c;
+  --color-logo-stem: #2c4a2e;
+  --color-logo-bar: #8cad6c;
 
   /* System fonts only, so the page does not depend on a font server. */
   --font-serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
@@ -40,6 +51,16 @@
     background-color: var(--color-paper);
     color: var(--color-ink);
     font-family: var(--font-sans);
+  }
+
+  /* The page itself never scrolls; only the conversation, history, and
+     workspace do. "clip" also stops scripts and focus from scrolling it,
+     which "hidden" does not. */
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: clip;
   }
 
   :focus-visible {
@@ -58,6 +79,73 @@
   /* Typeset math should match the size of the text around it. */
   .katex {
     font-size: 1em;
+  }
+}
+
+/* Dark theme. A script in index.html sets data-theme before the page draws,
+   from the saved choice or the system setting, so there is no flash. */
+:root {
+  color-scheme: light;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --color-paper: #191b18;
+  --color-surface: #21241f;
+  --color-ink: #e9e5d9;
+  --color-muted: #a5ab9f;
+  --color-rule: #3a3e36;
+  --color-accent: #8fc3a5;
+  --color-accent-strong: #aad4bb;
+  --color-accent-soft: #263a2f;
+  --color-on-accent: #0f1a14;
+  --color-flag: #e6b264;
+  --color-flag-soft: #3b2f1c;
+  --color-backdrop: rgb(0 0 0 / 0.6);
+  --color-logo-ink: #ece8dc;
+  --color-logo-stem: #c3d6c0;
+  --color-logo-bar: #8cb56c;
+}
+
+@layer base {
+  ::selection {
+    background-color: var(--color-accent-soft);
+    color: var(--color-ink);
+  }
+
+  /* Browsers paint autofilled fields in their own colors unless told otherwise. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--color-ink);
+    caret-color: var(--color-ink);
+    box-shadow: 0 0 0 1000px var(--color-surface) inset;
+  }
+
+  * {
+    scrollbar-color: var(--color-rule) transparent;
+  }
+
+  /* Some systems hide scrollbars until scrolling starts. The graph keeps its
+     sideways bar visible, so a wide graph shows that there is more. */
+  .graph-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-muted) var(--color-paper);
+  }
+  .graph-scroll::-webkit-scrollbar {
+    height: 8px;
+  }
+  .graph-scroll::-webkit-scrollbar-thumb {
+    background: var(--color-muted);
+    border-radius: 4px;
+  }
+  .graph-scroll::-webkit-scrollbar-track {
+    background: var(--color-paper);
+  }
+
+  select,
+  option {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
   }
 }
 
@@ -84,7 +172,7 @@
   }
   .btn-primary {
     background-color: var(--color-accent);
-    color: #fff;
+    color: var(--color-on-accent);
   }
   .btn-primary:hover:not(:disabled) {
     background-color: var(--color-accent-strong);

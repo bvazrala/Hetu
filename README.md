@@ -32,7 +32,7 @@ Learning
 Workspace
 
 - **Draft.** A panel for longer work, beside the conversation on wide screens and in its place on narrow ones. **Get feedback** sends the whole draft to the conversation. Selecting text offers **Ask about the selection**, which quotes it in the composer.
-- **Structure.** **Map the steps** lays out a proof or derivation step by step. A graph is drawn only for three or more steps with two or more dependencies. Each step can be revised, asked about, or challenged. No step is ever marked as verified.
+- **Structure.** **Map the steps** lays out a proof or derivation step by step. A graph is drawn only for three or more steps with two or more dependencies. It is fitted to the panel, can be zoomed, and scrolls sideways when wider. Each step can be revised, asked about, or challenged. No step is ever marked as verified.
 
 Accounts
 
@@ -41,7 +41,12 @@ Accounts
 - **Guests.** Guests start immediately. Their work stays in the tab and is not sent to the database. If a guest signs in, Hetu asks before saving their current work to the account.
 - **Profile and deletion.** A display name can be set. **Delete my data** removes every conversation, note, draft, and the profile. Removing the sign-in itself depends on Neon Auth; the app reports whether it worked.
 
-Accessibility: keyboard access throughout, a skip link, live regions for status, a text version of the graph, and reduced motion.
+Interface
+
+- **Light and dark themes.** A button beside **Workspace** steps through system, light, and dark. The choice is remembered in the browser and applied before the page draws.
+- **First screen.** The three starting points, and for a signed-in student on a narrow screen, their three most recent conversations.
+- **Quiet status.** One word in the header says whether the conversation is saved. Server problems appear only when there is one.
+- **Accessibility.** Keyboard access throughout, a skip link, live regions for status, a text version of the graph, and reduced motion.
 
 ## Architecture
 
@@ -99,7 +104,7 @@ Design decisions:
 
 | Part | Choice | Why it is here |
 | --- | --- | --- |
-| Frontend | React, TypeScript, Vite, Tailwind CSS | Component UI with type checking and a small set of design tokens. |
+| Frontend | React, TypeScript, Vite, Tailwind CSS | Component UI with type checking. Every color is a token in `frontend/src/index.css`, with one set of values per theme. |
 | Reply rendering | react-markdown, remark-gfm, remark-math, rehype-katex | Markdown, tables, math, and code. Raw HTML in a reply is not rendered. |
 | Accounts and data | Neon Auth (managed Better Auth), Neon Data API, `@neon/neon-js` | Sign-in, sessions, and per-user data access without a separate auth service. |
 | Database | Neon Postgres | Conversations, messages, notes, drafts, profiles. |
@@ -222,7 +227,7 @@ npm run build
 npm run lint
 ```
 
-111 tests. They cover the conversation, guest behavior, sign-in, email codes, password reset, saving, reopening, renaming, and deleting conversations, the workspace draft, the save prompt for guest work, failed saves, the reasoning graph, and the API client. Neon is replaced by fakes in these tests.
+120 tests. They cover the conversation, guest behavior, the theme setting, graph layout and zoom, sign-in, email codes, password reset, saving, reopening, renaming, and deleting conversations, the workspace draft, the save prompt for guest work, failed saves, the reasoning graph, and the API client. Neon is replaced by fakes in these tests.
 
 To see a real model's behavior, which the provider may bill: `uv run python -m scripts.evaluate_scenarios`.
 

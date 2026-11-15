@@ -20,9 +20,7 @@ interface Props {
   onChallenge: (reason: string) => void
 }
 
-const actionButton =
-  'rounded-md border border-accent px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent-soft ' +
-  'disabled:cursor-not-allowed disabled:opacity-50'
+const actionButton = 'btn btn-secondary'
 
 function listSteps(numbers: number[]): string {
   return numbers.map((n) => `step ${n}`).join(', ')
@@ -137,7 +135,7 @@ export function StepDetail({
             <button
               type="submit"
               disabled={challenging || reason.trim() === ''}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-rule disabled:text-muted"
+              className="btn btn-primary"
             >
               {challenging ? 'Reconsidering…' : 'Send challenge'}
             </button>

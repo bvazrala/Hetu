@@ -29,9 +29,9 @@ export interface GraphLayout {
   links: PlacedLink[]
 }
 
-export const NODE_WIDTH = 196
-export const NODE_HEIGHT = 88
-const GAP_X = 24
+export const NODE_WIDTH = 176
+export const NODE_HEIGHT = 80
+const GAP_X = 20
 const GAP_Y = 48
 // Arrows that pass over one or more rows run down a lane at the right edge.
 // Each gets its own track so they do not draw on top of each other.
@@ -88,18 +88,41 @@ function assignRows(nodes: ReasoningNode[], links: Link[]): Map<string, number> 
 }
 
 /**
+ * Orders the steps in each row by where the steps they rely on sit in the
+ * rows above, so arrows run mostly straight down and cross less. Steps with
+ * nothing above them keep their order in the student's draft.
+ */
+function orderRows(rows: string[][], links: Link[]): string[][] {
+  const prerequisites = new Map<string, string[]>()
+  for (const link of links) prerequisites.set(link.to, [...(prerequisites.get(link.to) ?? []), link.from])
+  const column = new Map<string, number>()
+  return rows.map((ids, rowIndex) => {
+    const keyed = ids.map((id, original) => {
+      const above = (prerequisites.get(id) ?? []).map((from) => column.get(from)).filter((at) => at !== undefined)
+      const centre = above.length > 0 ? above.reduce((sum, at) => sum + at, 0) / above.length : original
+      return { id, key: rowIndex === 0 ? original : centre, original }
+    })
+    keyed.sort((a, b) => a.key - b.key || a.original - b.original)
+    // Positions are kept relative to the row's centre, so rows of different widths line up.
+    keyed.forEach((entry, index) => column.set(entry.id, index - (keyed.length - 1) / 2))
+    return keyed.map((entry) => entry.id)
+  })
+}
+
+/**
  * Places steps in rows, with each step below everything it relies on.
- * Steps keep their original order within a row, and rows are centered.
+ * Within a row, steps sit under the steps they rely on, and rows are centered.
  */
 export function layoutGraph(nodes: ReasoningNode[], edges: Edge[]): GraphLayout {
   const links = toLinks(nodes, edges)
   const rowOf = assignRows(nodes, links)
 
-  const rows: string[][] = []
+  const unordered: string[][] = []
   for (const node of nodes) {
     const row = rowOf.get(node.id) ?? 0
-    ;(rows[row] ??= []).push(node.id)
+    ;(unordered[row] ??= []).push(node.id)
   }
+  const rows = orderRows(unordered, links)
 
   const widest = Math.max(1, ...rows.map((row) => row.length))
   const contentWidth = widest * NODE_WIDTH + (widest - 1) * GAP_X
