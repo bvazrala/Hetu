@@ -1,6 +1,6 @@
 # Hetu
 
-![Alt text](images/landing-page.png)   
+![Alt text](images/landing-page.jpg)   
 
 **An AI learning companion that knows when to explain and when to step back.**
 
