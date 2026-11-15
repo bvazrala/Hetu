@@ -1,8 +1,8 @@
 """Request limits for the endpoint that costs money.
 
 Counts live in memory, so they reset when the process restarts and are not
-shared between processes. That is enough for one small instance. The
-provider's own spend limit remains the final backstop.
+shared between processes. These limits slow abuse down. They do not cap the
+provider bill, so a spend limit at the provider is still needed.
 """
 
 import time
@@ -43,3 +43,20 @@ class RequestLimiter:
         recent.append(now)
         self._count_today += 1
         return None
+
+
+def client_address(peer: str, forwarded_for: str, trusted_proxy_hops: int) -> str:
+    """Choose the address that the per-client limit should count against.
+
+    A client can put anything in X-Forwarded-For, so its left side is never
+    trusted. Each proxy appends the address it received the request from, so
+    only the last `trusted_proxy_hops` entries were written by infrastructure
+    we rely on. With no trusted proxy, the socket peer is used and the header
+    is ignored.
+    """
+    if trusted_proxy_hops <= 0:
+        return peer
+    entries = [entry.strip() for entry in forwarded_for.split(",") if entry.strip()]
+    if len(entries) < trusted_proxy_hops:
+        return peer
+    return entries[-trusted_proxy_hops]

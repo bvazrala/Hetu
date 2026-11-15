@@ -1,147 +1,114 @@
 # Hetu
 
-Hetu is an open source reasoning workspace where students write their own arguments and examine the steps, instead of receiving finished solutions.
+Hetu is an open source learning environment that helps students examine their own reasoning. A student writes a proof in their own words. Hetu maps the steps, shows how they depend on each other, and asks one question about a possible gap. It does not write the proof.
+
+Live site: https://hetu-cin8.onrender.com
 
 The name comes from the Sanskrit word हेतु, which is associated with reason, cause, or the ground of an inference.
 
-## Overview
+## The educational problem
 
 Students often choose between two options. They can work alone and get no feedback on their process. Or they can use a tool that hands over an answer before they have thought the problem through.
 
-Hetu is meant to support the process itself. A student writes rough reasoning in a plain editor. Hetu then shows the steps it recognizes and asks one specific question about a gap, such as a conclusion that does not follow from the steps before it. It does not write the proof.
+Neither option helps a student see where their own argument is weak and repair it themselves.
 
-The first version focuses on short proofs about parity, divisibility, and simple implication.
+## What Hetu does
 
-## Current status
+Hetu has two views of the same work.
 
-Hetu is a hackathon prototype built for HackPrinceton Fall 2026.
+- **Freeform** is a plain editor for the problem and the student's reasoning.
+- **Structured** shows what Hetu read in that reasoning: the steps, what each step relies on, and at most one question about a step that may not follow.
 
-| Area | Status |
-| --- | --- |
-| Frontend shell with Freeform and Structured views | Working |
-| Example exercise with a sample analysis written by hand | Working |
-| Backend `GET /health` | Working |
-| Backend `POST /analyze` | Working |
-| Model workflow | Working. Passed 21 of 21 validation runs on seven short examples |
-| Interface connected to `POST /analyze` | Working. Browser tested against a scripted backend |
-| Deterministic checks | Not implemented |
-| Request limits | Working |
-| Public deployment | Configured in `render.yaml`. Not deployed yet |
+The student's text is the source of truth. Switching views never changes it, and an analysis is shown only while it matches the current text.
 
-**Inspect reasoning** sends the draft to the backend, which asks a hosted model to read it. If that fails for the unedited example, the interface shows a sample written by hand and labels it as a sample.
+The current version focuses on short proofs about parity, divisibility, and simple implication.
 
-## Features
+## Main features
 
-Implemented today:
+- **Reasoning graph.** Steps are drawn as connected boxes. Arrows run from a step to the steps that rely on it. Assumptions, claims, inferences, and conclusions have different borders, and a step with a question is marked.
+- **Step detail.** Selecting a step in the graph or in the text list shows its full statement, what it relies on, what uses it, and any question about it. The matching passage in the draft is highlighted.
+- **Revise this step.** Returns to the editor with that step's text selected.
+- **Challenge Hetu.** The student explains why a questioned step is justified. Hetu reads the draft again with that explanation and either withdraws the question or says what is still missing.
+- **One question, no solutions.** The model is instructed to ask about a gap without stating the missing argument. A hint is available on request.
+- **Honest labels.** Every result is marked as a model's judgment. A step without a question is described as unquestioned, not as correct.
+- **Saved drafts.** The problem and draft are kept in the browser's `localStorage` and restored on reload. **Clear workspace** removes them.
+- **Typeset math.** LaTeX in questions, hints, and steps is rendered with KaTeX.
+- **Keyboard and screen reader support.** A skip link, focus that moves to new results, arrow keys in the graph, a text version of the graph, and reduced motion.
+- **Fallback sample.** If live analysis fails for the built-in example, a sample written by hand is shown and labelled as a sample.
 
-- A responsive page with a problem field and a reasoning editor.
-- A Freeform and Structured toggle. Switching views never changes the draft.
-- A **Try an example** button that loads a parity proof with a gap in it.
-- **Inspect reasoning**, which analyzes whatever the student wrote and opens the Structured view.
-- A Structured view: the recognized steps, what each step relies on, the passage in question, one question, and an optional hint. When the model finds nothing to question, the view says so.
-- Typeset math in questions, hints, and steps. LaTeX such as `$\sqrt{2k}$` is rendered with KaTeX.
-- Loading and failure states. A failed analysis never changes or clears the draft.
-- Keyboard and screen reader support, described under Accessibility.
-- A sample analysis written by hand for the example, shown and labeled as a sample when live analysis fails.
-- An API status line that reports whether the backend answers `GET /health`.
-- `POST /analyze`, which sends a problem and a draft through a model workflow and returns typed JSON. It caps input length, enforces a timeout, and keeps provider errors out of responses.
-- Request limits on `POST /analyze`: a per-client limit per minute and a shared daily limit.
-- A script that runs the seven seed examples against the configured model and reports whether each result matches the expected judgment.
-
-### Roadmap
-
-Planned, not built:
-
-- Deterministic checks with SymPy where an expression can be checked.
-- Draft recovery through browser `localStorage`.
-- Voice input and read aloud, for students who prefer to speak or listen. The current provider also hosts speech models, so this should not need a second service.
-
-## Tech stack
-
-Installed and in use:
+## Technology stack
 
 | Part | Choice | Why it is here |
 | --- | --- | --- |
 | Frontend | React, TypeScript, Vite | Component UI with type checking and a fast dev server. |
 | Styling | Tailwind CSS | Consistent spacing and color from a small set of tokens in `frontend/src/index.css`. |
-| Math | KaTeX | Typesets LaTeX in the model's questions and in steps. It also emits MathML, which screen readers can read. |
-| Linting | oxlint | Ships with the Vite React template. |
-| Backend | FastAPI, Uvicorn | A small typed HTTP API and the server that runs it. |
-| Schemas | Pydantic | Defines the JSON shapes of requests and responses and validates the example fixture. |
+| Math | KaTeX | Typesets LaTeX and emits MathML for screen readers. |
+| Backend | FastAPI, Uvicorn, Pydantic | A small typed HTTP API. Pydantic defines the request and response shapes. |
+| Agent workflow | LangChain Deep Agents | Runs an orchestrator that can consult a critic subagent before reporting a gap. |
+| Model access | langchain-groq | Client for models hosted by Groq. The default is `openai/gpt-oss-120b`, an open weight model. |
 | Settings | pydantic-settings, python-dotenv | Read configuration and provider keys from the environment or `backend/.env`. |
-| Agent workflow | LangChain Deep Agents | Runs the orchestrator and its critic subagent. |
-| Model access | langchain-groq | LangChain's client for models hosted by Groq. |
-| Tests | pytest, httpx2 | Test runner and the HTTP client that FastAPI's test client needs. |
-| Tooling | npm, uv | Dependency management for the frontend and the backend. |
+| Tests | pytest, httpx2, Vitest, Testing Library | Backend and frontend tests. None of them calls a model. |
+| Tooling | uv, npm, oxlint | Dependency management and linting. |
 
-Planned and not installed yet: SymPy for deterministic checks.
-
-Versions used in testing: Node 22.23, npm 10.9, Python 3.13, uv 0.11 and 0.13, Vite 8.3, React 19.3, Tailwind CSS 4.3, TypeScript 7.0, KaTeX 0.19, FastAPI 0.162, Pydantic 2.14, deepagents 0.7.38, langchain 1.5, langchain-groq 1.1. Exact versions are pinned in `frontend/package-lock.json` and `backend/uv.lock`.
+The graph is drawn with plain HTML and SVG. Its layout is a small pure function in `frontend/src/lib/graph.ts`, so no graph library is needed.
 
 ## Architecture
-
-Every line in this diagram exists today.
 
 ```mermaid
 flowchart LR
     subgraph Browser
-        UI[React app]
+        ED[Freeform editor]
+        SV[Structured view and graph]
+        LS[(localStorage)]
     end
     subgraph Backend
-        API[FastAPI]
-        WF[Reasoning workflow]
+        API["FastAPI: /health, /analyze"]
+        LIM[Request limits]
+        ORC[Orchestrator]
         CR[Critic subagent]
+        DIR[Direct call fallback]
         CL["Clean-up: ids, spans, edges"]
     end
-    FX[("examples/sample_proofs.json")]
-    TS[Tests and validation script]
-    PR[Inference provider]
+    PR[Model provider]
 
-    FX -->|"bundled at build time"| UI
-    FX -->|"read by"| TS
-    UI -->|"GET /health"| API
-    UI -->|"POST /analyze"| API
-    API --> WF
-    WF <--> CR
-    WF -->|"model chosen by environment"| PR
-    WF --> CL
-    CL -->|"Analysis JSON"| API
+    ED <--> LS
+    ED -->|"problem, draft, optional challenge"| API
+    API --> LIM --> ORC
+    ORC <--> CR
+    ORC -.->|"on failure"| DIR
+    ORC --> PR
+    DIR --> PR
+    ORC --> CL
+    DIR --> CL
+    CL -->|"Analysis JSON"| SV
 ```
 
-What happens in one `POST /analyze` request:
+One `POST /analyze` request:
 
-1. `backend/app/main.py` checks the input lengths and starts a timer.
-2. `backend/app/llm.py` builds the chat model from `HETU_LLM_PROVIDER` and `HETU_LLM_MODEL`. It is the only code that reads those two values.
-3. `backend/app/agents.py` runs the workflow. The model splits the draft into quoted steps, says which steps rely on which, and names at most one gap.
-4. In the default `deep_agent` workflow, the orchestrator sends a suspected gap to a critic subagent before reporting it. The critic sees the problem with a fresh context and can overrule the suspicion. This is meant to reduce invented errors in correct proofs.
-5. `to_analysis` in the same file builds the response without a model. It finds each quoted step in the draft, computes the text spans, drops references to steps that do not exist, and labels the result as not verified.
-6. If the Deep Agents attempt fails, for example because the model returned no tool call, the request falls back to the direct workflow described below. That workflow retries itself once.
+1. `backend/app/main.py` checks the input sizes and the request limits.
+2. `backend/app/llm.py` builds the chat model from `HETU_LLM_PROVIDER` and `HETU_LLM_MODEL`. No other code names a provider.
+3. `backend/app/agents.py` runs the workflow. The orchestrator splits the draft into quoted steps and looks for one gap. Before reporting a gap it asks a critic subagent, which reads the draft with a fresh context and can overrule it.
+4. If the orchestrator fails, for example because the model returns no tool call, a single direct model call answers instead.
+5. `to_analysis` builds the response without a model. It finds each quoted step in the draft and computes its position. A step whose wording is not in the draft gets no position and is never highlighted.
 
-The direct workflow replaces steps 3 and 4 with a single structured model call and no critic. It uses no tool calling. Setting `HETU_WORKFLOW=direct` makes it the only workflow.
+A challenge uses the same endpoint and the same workflow. The request carries the questioned step, the question, and the student's explanation.
 
-On the frontend:
+## Local installation and setup
 
-- The student's problem and draft are held in `frontend/src/App.tsx`. Both views read the same state, so the draft is preserved exactly when the view changes.
-- Each analysis is stored with the exact text it was made for. If the student edits the draft afterwards, the Structured view stops showing that analysis.
-- `examples/sample_proofs.json` holds seven seed exercises: three correct proofs, two incomplete proofs, and two invalid inferences. The first one includes a sample analysis written by hand.
-- The frontend shows that sample only when live analysis fails and the problem and draft match the unedited example.
-- `frontend/src/lib/types.ts` mirrors the `Analysis` shape in `backend/app/schemas.py`.
+Prerequisites: [Node.js](https://nodejs.org/) 22.12 or newer and [uv](https://docs.astral.sh/uv/). uv installs the right Python version if it is missing.
 
-## Local setup
-
-Prerequisites: [Node.js](https://nodejs.org/) 22.12 or newer with npm, and [uv](https://docs.astral.sh/uv/). uv installs the Python version named in `backend/.python-version` if it is missing.
-
-Use two terminals. All paths are relative to the repository root.
-
-Terminal 1, backend:
+Backend, from the repository root:
 
 ```bash
 cd backend
+cp .env.example .env
 uv sync
 uv run uvicorn app.main:app --reload --port 8000
 ```
 
-Terminal 2, frontend:
+Put a provider key in `backend/.env` before starting. Without a key the server still runs, and `POST /analyze` answers 503.
+
+Frontend, in a second terminal:
 
 ```bash
 cd frontend
@@ -149,184 +116,78 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173. The footer should read "API: connected".
-
-To check the backend directly:
-
-```bash
-curl http://localhost:8000/health
-```
-
-Expected response: `{"status":"ok"}`
+Open http://localhost:5173. The footer shows "API: connected" when the backend is reachable.
 
 ### Environment variables
 
-The app runs without any environment file. `POST /analyze` then answers 503, and everything else works.
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `HETU_LLM_PROVIDER` | unset | Model provider, for example `groq`. |
+| `HETU_LLM_MODEL` | unset | Model identifier, for example `openai/gpt-oss-120b`. |
+| `GROQ_API_KEY` | unset | Key for Groq. Another provider uses its own variable and needs its LangChain package. |
+| `HETU_LLM_TEMPERATURE` | `0` | Sampling temperature. |
+| `HETU_WORKFLOW` | `deep_agent` | `deep_agent`, or `direct` to skip the orchestrator and critic. |
+| `HETU_ANALYZE_TIMEOUT_SECONDS` | `60` | Upper bound on one analysis. |
+| `HETU_CORS_ORIGINS` | `http://localhost:5173` | Browser origins allowed to call the API, separated by commas. |
+| `HETU_RATE_LIMIT_PER_MINUTE` | `20` | Requests one client address may make per minute. |
+| `HETU_DAILY_ANALYSIS_LIMIT` | `500` | Analyses allowed per day across all clients. |
+| `HETU_TRUSTED_PROXY_HOPS` | `0` | Proxies in front of the server that append to `X-Forwarded-For`. |
+| `VITE_API_BASE_URL` | `http://localhost:8000` | Frontend only. Base URL of the API. Set it in `frontend/.env.local`. |
 
-To enable analysis, copy the backend example and add a provider key to the copy:
+### Security and cost
 
-```bash
-cp backend/.env.example backend/.env
-```
+- Provider keys stay on the server. `backend/.env` is ignored by Git.
+- Any variable that starts with `VITE_` is public. Never put a secret in one.
+- The API lists its allowed origins explicitly and sends no credentials.
+- Error responses never include provider details. Those go to the server log.
+- Student text is sent to the model provider.
+- The request limits slow abuse down. They are counted in memory, reset on restart, and do not cap the provider bill. Set a spend limit with the provider.
+- With `HETU_TRUSTED_PROXY_HOPS=0` the forwarded header is ignored. Behind a proxy, only the entries that the trusted proxies appended are used, so a client cannot pick its own address.
 
-| Variable | Where | Default | Purpose |
-| --- | --- | --- | --- |
-| `HETU_CORS_ORIGINS` | backend | `http://localhost:5173` | Browser origins allowed to call the API, separated by commas. |
-| `HETU_LLM_PROVIDER` | backend | unset | Inference provider, for example `groq`. |
-| `HETU_LLM_MODEL` | backend | unset | Model identifier, for example `openai/gpt-oss-120b`. |
-| `HETU_LLM_TEMPERATURE` | backend | `0` | Sampling temperature. Low values make repeated runs agree more often. |
-| `GROQ_API_KEY` | backend | unset | Key for Groq. Other providers use their own variable. |
-| `HETU_WORKFLOW` | backend | `deep_agent` | `deep_agent` (with `direct` as its fallback) or `direct`. |
-| `HETU_ANALYZE_TIMEOUT_SECONDS` | backend | `60` | Upper bound on one analysis. |
-| `HETU_RATE_LIMIT_PER_MINUTE` | backend | `20` | Requests one client address may make per minute. |
-| `HETU_DAILY_ANALYSIS_LIMIT` | backend | `500` | Analyses allowed per day across all clients. |
-| `VITE_API_BASE_URL` | frontend | `http://localhost:8000` | Base URL of the API. Set it in `frontend/.env.local`. |
+### Deployment
 
-### Validate a model
-
-This step makes real model calls, which the provider may bill.
-
-```bash
-cd backend
-uv run python -m scripts.validate_model
-```
-
-The script runs the seven seed examples. For each run it prints the judgment, the time taken, the token counts, the critic's verdict, and the question. Useful options:
-
-```bash
-uv run python -m scripts.validate_model --runs 3
-uv run python -m scripts.validate_model --workflow direct
-uv run python -m scripts.validate_model --model openai/gpt-oss-20b
-uv run python -m scripts.validate_model --only parity
-```
-
-To try one request by hand while the backend is running:
-
-```bash
-curl -X POST http://localhost:8000/analyze \
-  -H "Content-Type: application/json" \
-  -d '{"problem": "Prove that the sum of two even integers is even.", "draft": "Let a = 2m and b = 2n. Then a + b = 2(m + n), so a + b is even."}'
-```
-
-## Configuration and costs
-
-- API keys belong in `backend/.env` or in the host's environment settings. That file is ignored by Git. Keys are never sent to the browser.
-- Any variable that starts with `VITE_` is public. Do not put a secret in one.
-- The example configuration uses `openai/gpt-oss-120b` hosted by Groq. `openai/gpt-oss-20b` is a cheaper alternative that did worse in validation.
-- Another provider needs its LangChain package, for example `uv add langchain-mistralai`, and its own key variable.
-- Open weights do not make inference free. A hosted model is billed by the provider, and student text is sent to that provider.
-- One analysis in the `deep_agent` workflow usually makes one to three model calls, and one or two more if it falls back. Provider rate limits apply.
-- `POST /analyze` refuses requests over its limits with status 429. The limits are counted in memory, so they reset when the server restarts. Set a spend limit with the provider as well.
-- The model weights and the provider APIs are not part of this repository.
-
-## How to use
-
-1. Start the backend and the frontend as described above, with a provider key in `backend/.env`.
-2. Select **Try an example**. The problem is: prove that if the integer n² is even, then n is even. The draft reads: "Assume n² = 2k for some integer k. Then n = √(2k), so n must be even."
-3. Select **Inspect reasoning**, or press Ctrl+Enter (⌘+Enter on a Mac) in the draft. After a few seconds the Structured view lists the steps the model recognized. The theorem is true, but the draft never shows why n is even, so the model should question that step.
-4. Switch back to Freeform and revise the draft, for example with a proof by contrapositive. The draft is exactly as you left it.
-5. Inspect again. A complete proof should produce "No question this time."
-
-Without a provider key, step 3 shows the sample written by hand instead, with a note that live analysis failed. For any other draft the interface reports the failure and keeps the draft.
-
-## Accessibility
-
-What the interface does:
-
-- Every control works from the keyboard. Ctrl+Enter, or ⌘+Enter on a Mac, inspects from either text field.
-- A skip link at the top of the page jumps to the main content.
-- When an analysis arrives, focus moves to its heading, so keyboard and screen reader users land on the result.
-- Loading, failure, and API status messages are announced through live regions.
-- Math is typeset with MathML alongside the visual output.
-- The step in question is marked with an underline and a background, not with color alone, and is labeled for screen readers.
-- Transitions are switched off when the system asks for reduced motion.
-- Fonts are system fonts and the layout reflows down to a phone width.
-
-How this was checked: automated checks with axe-core reported no violations on the editor, the editor with the example, and the analysis view. The keyboard path was exercised in headless Chrome.
-
-What was not checked: no one has tested the interface with a screen reader such as VoiceOver or NVDA. Automated checks find only some accessibility problems.
+`render.yaml` describes the two services used for the live site: the API as a Python web service and the interface as a static site.
 
 ## Testing
-
-Backend:
 
 ```bash
 cd backend
 uv run pytest
 ```
 
-This runs 34 tests without network access or an API key. They cover:
-
-- the health endpoint and the CORS allow list;
-- the example fixture's consistency with the `Analysis` schema;
-- the clean-up step that builds ids, spans, and edges from a model answer;
-- the Deep Agents workflow, with a scripted model standing in for a real one;
-- the fallback from the Deep Agents workflow to the direct one, and the direct workflow's single retry;
-- the request limits, using a fake clock;
-- the request that would be sent to Groq, with the network call replaced;
-- `POST /analyze` status codes for success, bad input, timeout, model failure, and missing configuration.
-
-These tests show that the plumbing works. They say nothing about how well a real model judges proofs. That is what the validation script is for.
-
-Frontend:
+56 tests. They cover the API status codes, request limits, the forwarded header handling, the clean-up of model output, source positions for matched and unmatched steps, the challenge outcomes, and both workflows with a scripted model.
 
 ```bash
 cd frontend
+npm test
 npm run build
 npm run lint
 ```
 
-`npm run build` type checks the code and produces a production build. There are no frontend unit tests yet. The interface states were checked by hand in a browser.
+65 tests. They cover the graph layout and arrow direction, selecting steps with and without a question, the revise and challenge interactions, discarding a response that arrives after the draft changed, saving and restoring drafts, and the API status line.
 
-### Validation results
+No automated test calls a model. To check a live model, which the provider may bill:
 
-These come from `scripts/validate_model` on 14 November 2026, using `openai/gpt-oss-120b` on Groq at temperature 0. Each of the seven examples ran three times.
+```bash
+cd backend
+uv run python -m scripts.validate_model
+uv run python -m scripts.validate_model --challenges
+```
 
-| Workflow | Runs passed | Average time | Slowest run | Attempts retried |
-| --- | --- | --- | --- | --- |
-| `deep_agent` | 21 of 21 | 2.5 s | 4.8 s | 1 |
-| `direct` | 21 of 21 | 2.2 s | 5.7 s | 3 |
+The first command runs seven seed proofs from `examples/sample_proofs.json`. The second runs three scripted challenges.
 
-A run passes when the workflow agrees with the fixture on whether the draft has a gap. Read these numbers with care:
+## Known limitations
 
-- Seven short examples are a smoke test, not a measurement of accuracy.
-- The author wrote the examples, and revised the prompts after seeing results on three of them.
-- At temperature 0, repeated runs of one example mostly repeat each other.
-- A later single pass, after one instruction was reworded, passed 6 of 7. The seventh failed twice in a row because the model returned no tool call. The fallback to the direct workflow was added in response.
-- With the fallback and the instruction to write math as LaTeX in place, a pass of two runs per example passed 14 of 14, averaging 2.9 s. The fallback was not triggered. Two of the eight questions contained LaTeX without dollar signs, which the interface still typesets.
-- The wording rules for questions and hints were tightened once more after that pass.
-- With an earlier prompt, `openai/gpt-oss-20b` passed 6 of 9 runs on three examples and missed the incomplete proof in most of them.
-
-## Deployment
-
-`render.yaml` describes two services for [Render](https://render.com/): the API as a Python web service and the interface as a static site. This configuration has not been deployed yet.
-
-1. Push the repository to GitHub.
-2. In the Render dashboard, choose **New > Blueprint** and select the repository.
-3. When asked, enter `GROQ_API_KEY`. Leave `HETU_CORS_ORIGINS` and `VITE_API_BASE_URL` empty for now if the dashboard allows it, or enter a placeholder.
-4. After both services exist, copy each public URL into the other service's variable, with no trailing slash: the static site's URL into `HETU_CORS_ORIGINS` on `hetu-api`, and the API's URL into `VITE_API_BASE_URL` on `hetu`.
-5. Redeploy both services. The static site reads its variable at build time, so it needs a new build.
-
-The blueprint asks for Render's Starter instance for the API. That is a paid plan and it stays awake. To avoid the charge, change `plan: starter` to `plan: free` in `render.yaml`. A free instance sleeps after 15 minutes without traffic and takes about a minute to wake. The interface calls `GET /health` on page load to start that wake-up early and shows "API: starting up" while it waits. The static site is free on either plan.
-
-## Limitations and next steps
-
-- The validation set is seven short examples. Passing it does not show how the model handles longer or less tidy drafts.
-- Every judgment is a model's opinion. Nothing is formally verified, and the response says so in its `limitations` field.
-- A model can misread a correct proof and report a gap that is not there. The critic step is meant to reduce this. It cannot rule it out.
-- The project was tested on Linux and macOS. Nothing was tested on Windows.
-
-Next steps, in order:
-
-1. Deploy, then test the public URL from a phone and from a second network.
-2. Try drafts beyond the seed examples and add the instructive ones to the fixture.
-3. Add deterministic checks for claims that can be tested, such as searching for a counterexample.
-
-## License
-
-The application code in this repository is licensed under the Apache License 2.0. See `LICENSE` and `NOTICE`.
-
-The license covers this code only. The language models and the inference provider's service are separate works with their own terms, and neither is included here.
+- Every judgment comes from a language model. Nothing is formally verified, and a model can question a correct step or miss a real gap.
+- The validation set is seven short proofs. It does not show how the model handles longer or less tidy drafts.
+- Hetu reports at most one question per analysis.
+- A challenge is a fresh analysis with the student's explanation added. Hetu keeps no memory of earlier exchanges.
+- A step is located only when its wording appears in the draft. Steps that the model rephrased are listed without a highlight.
+- The dependency arrows are the model's reading. Missing or extra arrows are possible.
+- Drafts are saved only in the current browser. There are no accounts and nothing is synced.
+- Behind several proxies, the per-client limit depends on `HETU_TRUSTED_PROXY_HOPS` matching the hosting setup. If it does not, clients share a limit.
+- Automated accessibility checks pass. The interface has not been tested with a screen reader.
+- Only short mathematical proofs are supported.
 
 ## Demo video
 
@@ -335,3 +196,9 @@ TODO: Add the demo thumbnail here and link it to the video.
 <!-- When the video exists, replace the TODO line with:
 [![Hetu demo video](PATH_TO_THUMBNAIL)](VIDEO_URL)
 -->
+
+## License
+
+The application code is licensed under the Apache License 2.0. See `LICENSE` and `NOTICE`.
+
+The license covers this code only. The language models and the provider's service are separate works with their own terms, and neither is included here.

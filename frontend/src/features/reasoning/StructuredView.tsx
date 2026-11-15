@@ -1,127 +1,268 @@
-import type { RefObject } from 'react'
+import { useState, type RefObject } from 'react'
 import { MathText } from '../../components/MathText'
-import type { Analysis, ReasoningNode } from '../../lib/types'
+import { toLinks } from '../../lib/graph'
+import { TYPE_LABELS } from '../../lib/labels'
+import { toStringRange } from '../../lib/spans'
+import type { Observation, ReasoningNode } from '../../lib/types'
+import type { Inspection } from '../workspace/useWorkspace'
+import { ReasoningGraph } from './ReasoningGraph'
+import { StepDetail } from './StepDetail'
 
 interface Props {
   draft: string
-  analysis: Analysis | null
-  /** True when an analysis exists but the draft has changed since. */
+  /** The analysis for the current text, or null. */
+  inspection: Inspection | null
+  /** True when an analysis exists but the text has changed since. */
   stale: boolean
-  /** Why live analysis failed, when the hand-written sample is shown instead. */
-  fallbackReason: string | null
+  busy: 'inspect' | 'challenge' | null
+  error: string | null
+  challengeError: string | null
   /** The view's heading. The app moves focus here when a new analysis arrives. */
   headingRef: RefObject<HTMLHeadingElement | null>
+  onInspect: () => void
+  onRevise: (node: ReasoningNode) => void
+  onChallenge: (node: ReasoningNode, observation: Observation, reason: string) => void
 }
 
-const TYPE_LABELS: Record<ReasoningNode['type'], string> = {
-  assumption: 'Assumption',
-  claim: 'Claim',
-  inference: 'Inference',
-  conclusion: 'Conclusion',
-}
+const sectionHeading = 'mb-2 text-sm font-medium text-muted'
 
-export function StructuredView({ draft, analysis, stale, fallbackReason, headingRef }: Props) {
-  if (!analysis) {
+export function StructuredView(props: Props) {
+  const { inspection, stale, busy, error, headingRef, onInspect } = props
+
+  if (!inspection) {
     return (
       <div className="rounded-md border border-dashed border-rule px-5 py-8 text-center">
         <h2 ref={headingRef} tabIndex={-1} className="font-medium">
-          {stale ? 'Your draft has changed.' : 'Nothing inspected yet.'}
+          {stale ? 'Your draft has changed since the last analysis.' : 'Nothing inspected yet.'}
         </h2>
         <p className="mx-auto mt-2 max-w-md text-sm text-muted">
           {stale
-            ? 'The last analysis no longer matches what you wrote. Switch to Freeform and inspect again.'
+            ? 'The earlier feedback no longer matches what you wrote, so it is not shown.'
             : 'Switch to Freeform, write your reasoning, and select Inspect reasoning.'}
+        </p>
+        {stale && (
+          <button
+            type="button"
+            onClick={onInspect}
+            disabled={busy !== null}
+            className="mt-5 rounded-md bg-accent px-5 py-2.5 font-medium text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-rule disabled:text-muted"
+          >
+            {busy === 'inspect' ? 'Inspecting…' : 'Inspect current draft'}
+          </button>
+        )}
+        <p aria-live="polite" className="mt-3 text-sm">
+          {stale && error && (
+            <>
+              <span className="font-medium">{error}</span> <span className="text-muted">Your draft is unchanged.</span>
+            </>
+          )}
         </p>
       </div>
     )
   }
 
-  // One suggestion at a time: only the first observation is shown.
-  const observation = analysis.observations.at(0)
+  return <AnalysisView {...props} inspection={inspection} />
+}
+
+function AnalysisView({
+  draft,
+  inspection,
+  busy,
+  challengeError,
+  headingRef,
+  onRevise,
+  onChallenge,
+}: Props & { inspection: Inspection }) {
+  const { analysis, fallbackReason, challengeReason } = inspection
+
+  // One question at a time: only the first observation is shown.
+  const observation = analysis.observations.at(0) ?? null
+  const flagged = new Set(observation ? [observation.target] : [])
+  const [selectedId, setSelectedId] = useState<string | null>(observation?.target ?? null)
+
   const stepNumber = new Map(analysis.nodes.map((node, index) => [node.id, index + 1]))
-  const questioned = analysis.nodes.find((node) => node.id === observation?.target)
+  const links = toLinks(analysis.nodes, analysis.edges)
+  const numbersOf = (ids: string[]) => ids.map((id) => stepNumber.get(id)!).sort((a, b) => a - b)
+  const reliesOn = (id: string) => numbersOf(links.filter((link) => link.to === id).map((link) => link.from))
+  const usedBy = (id: string) => numbersOf(links.filter((link) => link.from === id).map((link) => link.to))
+
+  const selected = analysis.nodes.find((node) => node.id === selectedId) ?? null
+  const selectedRange = selected ? toStringRange(draft, selected.span) : null
+  const selectedHasQuestion = selected !== null && flagged.has(selected.id)
 
   return (
     <div className="space-y-8">
-      <h2 ref={headingRef} tabIndex={-1} className="font-serif text-xl font-semibold">
-        Analysis
-      </h2>
+      <div>
+        <h2 ref={headingRef} tabIndex={-1} className="font-serif text-xl font-semibold">
+          Analysis
+        </h2>
+        <p className="mt-2 text-sm text-muted">
+          {analysis.source === 'sample' ? (
+            <>
+              <span className="font-medium text-ink">Sample analysis.</span> Written by hand for this example. No model
+              was called.{fallbackReason && ` Shown because live analysis failed: ${fallbackReason}`}
+            </>
+          ) : (
+            <>
+              <span className="font-medium text-ink">A model read your draft.</span> It can misread a step. Nothing
+              here is a formal check.
+            </>
+          )}
+        </p>
+      </div>
 
-      <p className="border-l-2 border-accent pl-3 text-sm text-muted">
-        {analysis.source === 'sample' ? (
-          <>
-            <span className="font-medium text-ink">Sample analysis.</span> Written by hand for this example. No model
-            was called.{fallbackReason && ` Shown because live analysis failed: ${fallbackReason}`}
-          </>
+      {challengeReason && analysis.challenge && (
+        <section aria-labelledby="challenge-heading" className="rounded-md border border-rule bg-surface px-5 py-4">
+          <h3 id="challenge-heading" className="font-medium">
+            {analysis.challenge.outcome === 'withdrawn'
+              ? 'Hetu withdrew its question'
+              : 'Hetu still has its question'}
+          </h3>
+          <dl className="mt-3 space-y-3 text-sm">
+            <div>
+              <dt className="font-medium text-muted">You said</dt>
+              <dd className="mt-0.5 font-serif text-base">{challengeReason}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted">Hetu replied</dt>
+              <dd className="mt-0.5 font-serif text-base">
+                <MathText text={analysis.challenge.response} />
+              </dd>
+            </div>
+          </dl>
+        </section>
+      )}
+
+      {!observation && (
+        <div className="rounded-md border border-rule bg-surface px-5 py-4">
+          <p className="font-medium">Hetu has no question about this draft.</p>
+          <p className="mt-1 text-sm text-muted">
+            It found nothing to ask. That is one reading by a model, not a check that the argument is correct.
+          </p>
+        </div>
+      )}
+
+      <section aria-labelledby="graph-heading">
+        <h3 id="graph-heading" className={sectionHeading}>
+          Reasoning graph
+        </h3>
+        <ReasoningGraph
+          nodes={analysis.nodes}
+          edges={analysis.edges}
+          flagged={flagged}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+        />
+      </section>
+
+      <section
+        id="step-detail"
+        aria-labelledby="detail-heading"
+        aria-live="polite"
+        className="rounded-md border border-rule bg-surface px-5 py-5"
+      >
+        <h3 id="detail-heading" className={sectionHeading}>
+          Selected step
+        </h3>
+        {selected ? (
+          <StepDetail
+            // A fresh panel per step, so a half-written challenge does not follow the selection.
+            key={selected.id}
+            node={selected}
+            number={stepNumber.get(selected.id)!}
+            reliesOn={reliesOn(selected.id)}
+            usedBy={usedBy(selected.id)}
+            observation={selectedHasQuestion ? observation : null}
+            canChallenge={analysis.source === 'live'}
+            challenging={busy === 'challenge'}
+            challengeError={challengeError}
+            onRevise={() => onRevise(selected)}
+            onChallenge={(reason) => observation && onChallenge(selected, observation, reason)}
+          />
         ) : (
-          <>
-            <span className="font-medium text-ink">Model analysis.</span> A model read your draft. It can misread a
-            step, so treat this as a second reader, not a grade.
-          </>
+          <p className="text-sm">Select a step in the graph, or in the list below, to see what it relies on.</p>
         )}
-      </p>
+      </section>
 
       <section aria-labelledby="draft-heading">
-        <h3 id="draft-heading" className="mb-2 text-sm font-medium text-muted">
+        <h3 id="draft-heading" className={sectionHeading}>
           Your draft
         </h3>
         <p className="font-serif text-lg leading-relaxed whitespace-pre-wrap">
-          <DraftWithHighlight draft={draft} node={questioned} />
+          {selectedRange ? (
+            <>
+              {draft.slice(0, selectedRange.start)}
+              <mark
+                className={
+                  'rounded-sm px-0.5 text-ink underline decoration-2 underline-offset-4 ' +
+                  (selectedHasQuestion ? 'bg-flag-soft decoration-flag' : 'bg-transparent decoration-ink')
+                }
+              >
+                <span className="sr-only">Start of step {stepNumber.get(selected!.id)}. </span>
+                {draft.slice(selectedRange.start, selectedRange.end)}
+                <span className="sr-only"> End of step {stepNumber.get(selected!.id)}.</span>
+              </mark>
+              {draft.slice(selectedRange.end)}
+            </>
+          ) : (
+            draft
+          )}
         </p>
       </section>
 
       <section aria-labelledby="steps-heading">
-        <h3 id="steps-heading" className="mb-2 text-sm font-medium text-muted">
-          Steps as Hetu reads them
+        <h3 id="steps-heading" className={sectionHeading}>
+          Steps as text
         </h3>
-        <ol role="list" className="divide-y divide-rule border-y border-rule">
+        {/* Safari drops list semantics when list styling is removed, so the role is stated. */}
+        <ol role="list" aria-labelledby="steps-heading" className="divide-y divide-rule border-y border-rule">
           {analysis.nodes.map((node, index) => {
-            const reliesOn = analysis.edges
-              .filter((edge) => edge.source === node.id)
-              .map((edge) => stepNumber.get(edge.target))
-              .filter((n) => n !== undefined)
-
+            const isSelected = node.id === selectedId
+            const prerequisites = reliesOn(node.id)
             return (
-              <li key={node.id} className="py-4">
-                <div className="flex gap-4">
-                  <span aria-hidden="true" className="w-5 shrink-0 pt-1 text-right text-sm text-muted tabular-nums">
+              <li
+                key={node.id}
+                aria-current={isSelected ? 'true' : undefined}
+                className={'py-3 ' + (isSelected ? 'border-l-2 border-ink pl-3' : 'pl-[14px]')}
+              >
+                <button
+                  type="button"
+                  aria-pressed={isSelected}
+                  aria-controls="step-detail"
+                  onClick={() => setSelectedId(node.id)}
+                  className="flex w-full gap-3 rounded-sm text-left"
+                >
+                  <span aria-hidden="true" className="w-5 shrink-0 pt-0.5 text-right text-sm text-muted tabular-nums">
                     {index + 1}
                   </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium tracking-wide text-accent uppercase">{TYPE_LABELS[node.type]}</p>
-                    <p className="mt-1 font-serif text-lg leading-relaxed">
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-2 text-xs font-medium tracking-wide text-muted uppercase">
+                      <span className="sr-only">Step {index + 1}, </span>
+                      {TYPE_LABELS[node.type]}
+                      {flagged.has(node.id) && (
+                        <span className="rounded-full border border-flag px-1.5 text-[0.65rem] text-flag normal-case">
+                          Question
+                        </span>
+                      )}
+                    </span>
+                    <span className="mt-0.5 block font-serif text-lg leading-relaxed">
                       <MathText text={node.text} />
+                    </span>
+                  </span>
+                </button>
+                <div className="mt-1 space-y-1 pl-8 text-sm text-muted">
+                  {prerequisites.length > 0 && (
+                    <p>
+                      Relies on {prerequisites.length === 1 ? 'step' : 'steps'} {prerequisites.join(', ')}
                     </p>
-                    {reliesOn.length > 0 && (
-                      <p className="mt-1 text-sm text-muted">
-                        Relies on {reliesOn.length === 1 ? 'step' : 'steps'} {reliesOn.join(', ')}
-                      </p>
-                    )}
-
-                    {observation && observation.target === node.id && (
-                      <div className="mt-4 rounded-md bg-accent-soft px-4 py-3">
-                        <p className="text-sm font-medium text-accent-strong">A question about this step</p>
-                        <p className="mt-1 font-serif text-lg leading-relaxed">
-                          <MathText text={observation.question} />
-                        </p>
-                        {observation.hint && (
-                          <details className="mt-3 text-sm">
-                            <summary className="w-fit cursor-pointer font-medium text-accent-strong">
-                              Show a hint
-                            </summary>
-                            <p className="mt-2">
-                              <MathText text={observation.hint} />
-                            </p>
-                          </details>
-                        )}
-                        <p className="mt-3 text-sm text-muted">
-                          {observation.verification === 'tool_verified'
-                            ? 'Confirmed by a deterministic check.'
-                            : 'Not confirmed by a checker. Treat it as a question, not a verdict.'}
-                        </p>
-                      </div>
-                    )}
-                  </div>
+                  )}
+                  {node.span === null && <p>Not matched to exact text in your draft.</p>}
+                  {observation && flagged.has(node.id) && (
+                    <p className="text-ink">
+                      <span className="font-medium">Question: </span>
+                      <MathText text={observation.question} />
+                    </p>
+                  )}
                 </div>
               </li>
             )
@@ -129,18 +270,9 @@ export function StructuredView({ draft, analysis, stale, fallbackReason, heading
         </ol>
       </section>
 
-      {!observation && (
-        <div className="rounded-md bg-accent-soft px-4 py-3">
-          <p className="font-medium text-accent-strong">No question this time.</p>
-          <p className="mt-1 text-sm">
-            Hetu did not find a step to question. That is one reader's view, not a proof that the argument is correct.
-          </p>
-        </div>
-      )}
-
       {analysis.limitations.length > 0 && (
         <section aria-labelledby="limits-heading">
-          <h3 id="limits-heading" className="mb-2 text-sm font-medium text-muted">
+          <h3 id="limits-heading" className={sectionHeading}>
             Limitations
           </h3>
           <ul className="list-disc space-y-1 pl-5 text-sm text-muted">
@@ -151,22 +283,5 @@ export function StructuredView({ draft, analysis, stale, fallbackReason, heading
         </section>
       )}
     </div>
-  )
-}
-
-/** Renders the draft exactly as written, marking the passage in question. */
-function DraftWithHighlight({ draft, node }: { draft: string; node: ReasoningNode | undefined }) {
-  const span = node?.span
-  if (!span) return <>{draft}</>
-  return (
-    <>
-      {draft.slice(0, span.start)}
-      <mark className="rounded-sm bg-accent-soft px-0.5 text-ink underline decoration-accent decoration-2 underline-offset-4">
-        <span className="sr-only">Start of the step in question. </span>
-        {draft.slice(span.start, span.end)}
-        <span className="sr-only"> End of the step in question.</span>
-      </mark>
-      {draft.slice(span.end)}
-    </>
   )
 }

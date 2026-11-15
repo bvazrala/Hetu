@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.agents import Analyzer, build_analyzer
 from app.config import get_settings
-from app.limits import RequestLimiter
+from app.limits import RequestLimiter, client_address
 from app.llm import InferenceNotConfigured
 from app.schemas import Analysis, AnalyzeRequest, HealthResponse
 
@@ -34,10 +34,11 @@ limiter = RequestLimiter(settings.rate_limit_per_minute, settings.daily_analysis
 
 def enforce_limits(request: Request) -> None:
     """Dependency that answers 429 when a client or the whole service is over its limit."""
-    # Behind a hosting proxy the caller's address arrives in X-Forwarded-For.
-    # The header can be forged, which is why the daily limit ignores it.
-    forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-    client = forwarded or (request.client.host if request.client else "unknown")
+    client = client_address(
+        peer=request.client.host if request.client else "unknown",
+        forwarded_for=request.headers.get("x-forwarded-for", ""),
+        trusted_proxy_hops=settings.trusted_proxy_hops,
+    )
     message = limiter.check(client)
     if message:
         raise HTTPException(429, message, headers={"Retry-After": "60"})
@@ -45,7 +46,7 @@ def enforce_limits(request: Request) -> None:
 
 @lru_cache
 def _cached_analyzer() -> Analyzer:
-    # Built on first use and then reused. A failed build is not cached.
+    # lru_cache does not store exceptions, so a failed build is tried again.
     return build_analyzer(get_settings())
 
 
@@ -68,10 +69,13 @@ def health() -> HealthResponse:
 
 @app.post("/analyze", dependencies=[Depends(enforce_limits)])
 async def analyze(request: AnalyzeRequest, analyzer: Annotated[Analyzer, Depends(get_analyzer)]) -> Analysis:
-    """Analyze one draft. Errors never include provider details; those go to the log."""
+    """Analyze one draft, or reconsider it in light of a challenge.
+
+    Errors never include provider details; those go to the log.
+    """
     try:
         return await asyncio.wait_for(
-            analyzer(request.problem, request.draft),
+            analyzer(request.problem, request.draft, request.challenge),
             timeout=settings.analyze_timeout_seconds,
         )
     except TimeoutError:

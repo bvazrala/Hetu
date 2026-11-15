@@ -1,34 +1,57 @@
-import type { KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { MAX_DRAFT_CHARS, MAX_PROBLEM_CHARS } from '../../lib/api'
+import type { FocusRequest } from './useWorkspace'
 
 interface Props {
   problem: string
   draft: string
   busy: boolean
   error: string | null
+  notice: string | null
+  focusRequest: FocusRequest | null
   onProblemChange: (value: string) => void
   onDraftChange: (value: string) => void
   onLoadExample: () => void
   onInspect: () => void
+  onReset: () => void
 }
 
 const fieldClass =
   'w-full rounded-md border border-rule bg-surface px-4 py-3 font-serif text-lg leading-relaxed ' +
   'placeholder:text-muted focus-visible:border-accent'
 
+const quietButton =
+  'rounded-md px-3 py-2.5 text-sm font-medium text-muted underline-offset-4 hover:text-ink hover:underline ' +
+  'disabled:cursor-not-allowed disabled:opacity-50'
+
 export function FreeformEditor({
   problem,
   draft,
   busy,
   error,
+  notice,
+  focusRequest,
   onProblemChange,
   onDraftChange,
   onLoadExample,
   onInspect,
+  onReset,
 }: Props) {
-  const canInspect = draft.trim().length > 0 && !busy
+  const draftField = useRef<HTMLTextAreaElement>(null)
+  const [confirmingReset, setConfirmingReset] = useState(false)
 
-  // Ctrl+Enter, or Command+Enter on a Mac, inspects without leaving the keyboard.
+  const canInspect = draft.trim().length > 0 && !busy
+  const hasWork = problem !== '' || draft !== ''
+
+  useEffect(() => {
+    const field = draftField.current
+    if (!focusRequest || !field) return
+    field.focus()
+    if (focusRequest.range) {
+      field.setSelectionRange(focusRequest.range.start, focusRequest.range.end)
+    }
+  }, [focusRequest])
+
   function inspectOnShortcut(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && canInspect) {
       event.preventDefault()
@@ -55,11 +78,15 @@ export function FreeformEditor({
       </div>
 
       <div>
-        <label htmlFor="draft" className="mb-2 block text-sm font-medium text-muted">
-          Your reasoning
-        </label>
+        <div className="mb-2 flex items-baseline justify-between gap-4">
+          <label htmlFor="draft" className="block text-sm font-medium text-muted">
+            Your reasoning
+          </label>
+          <span className="text-xs text-muted">Saved in this browser</span>
+        </div>
         <textarea
           id="draft"
+          ref={draftField}
           rows={9}
           maxLength={MAX_DRAFT_CHARS}
           value={draft}
@@ -89,6 +116,36 @@ export function FreeformEditor({
         >
           Try an example
         </button>
+
+        <div className="sm:ml-auto">
+          {confirmingReset ? (
+            <span className="flex flex-wrap items-center gap-1 text-sm">
+              <span className="text-muted">Clear the problem and your reasoning?</span>
+              <button
+                type="button"
+                className={quietButton + ' text-ink'}
+                onClick={() => {
+                  setConfirmingReset(false)
+                  onReset()
+                }}
+              >
+                Yes, clear
+              </button>
+              <button type="button" className={quietButton} onClick={() => setConfirmingReset(false)}>
+                Keep
+              </button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              className={quietButton}
+              disabled={!hasWork}
+              onClick={() => setConfirmingReset(true)}
+            >
+              Clear workspace
+            </button>
+          )}
+        </div>
       </div>
 
       {/* One live region, so screen readers hear each change of state. */}
@@ -96,10 +153,12 @@ export function FreeformEditor({
         {busy ? (
           <p className="text-muted">Reading your draft. This usually takes a few seconds.</p>
         ) : error ? (
-          <p className="border-l-2 border-accent pl-3">
+          <p className="border-l-2 border-flag pl-3">
             <span className="font-medium">{error}</span>{' '}
             <span className="text-muted">Your draft is unchanged. You can try again.</span>
           </p>
+        ) : notice ? (
+          <p className="border-l-2 border-flag pl-3">{notice}</p>
         ) : (
           <p className="text-muted">
             Hetu asks a model to read your draft and question one step. It does not write the proof. Shortcut: Ctrl

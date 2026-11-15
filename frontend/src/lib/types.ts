@@ -3,7 +3,7 @@
 
 export type NodeType = 'assumption' | 'claim' | 'inference' | 'conclusion'
 
-/** Character offsets into the draft. `end` is exclusive. */
+/** Offsets into the draft, counted in Unicode code points. `end` is exclusive. */
 export interface Span {
   start: number
   end: number
@@ -13,6 +13,7 @@ export interface ReasoningNode {
   id: string
   type: NodeType
   text: string
+  /** Null when the step's wording was not found in the draft. */
   span: Span | null
 }
 
@@ -32,13 +33,27 @@ export interface Observation {
   hint: string | null
 }
 
+/** A student's disagreement with one question. Sent with a new analysis request. */
+export interface Challenge {
+  step_text: string
+  question: string
+  reason: string
+}
+
+export interface ChallengeResult {
+  /** "withdrawn": the step is no longer questioned. "maintained": it still is. */
+  outcome: 'withdrawn' | 'maintained'
+  response: string
+}
+
 export interface Analysis {
-  /** "sample" is hand-written fixture content. "live" is reserved for real results. */
+  /** "sample" is hand-written fixture content. "live" is a model's result. */
   source: 'sample' | 'live'
   nodes: ReasoningNode[]
   edges: Edge[]
   observations: Observation[]
   limitations: string[]
+  challenge?: ChallengeResult | null
 }
 
 export interface Example {

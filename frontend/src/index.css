@@ -10,6 +10,10 @@
   --color-accent: #1f5a43;
   --color-accent-strong: #174634;
   --color-accent-soft: #e4eee8;
+  /* Marks a step Hetu has a question about. Deliberately neither red nor
+     green: a question is not an error, and no step is marked as verified. */
+  --color-flag: #7c4a03;
+  --color-flag-soft: #f7ecd4;
 
   /* System fonts only, so the page does not depend on a font server. */
   --font-serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;

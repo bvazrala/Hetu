@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = 20
     daily_analysis_limit: int = 500
 
+    # How many proxies in front of this server append to X-Forwarded-For.
+    # 0 ignores the header. See `client_address` in `app/limits.py`.
+    trusted_proxy_hops: int = 0
+
     @field_validator("llm_provider", "llm_model", mode="before")
     @classmethod
     def _blank_is_unset(cls, value: str | None) -> str | None:

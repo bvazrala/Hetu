@@ -25,6 +25,9 @@ services:
         value: 0
       - key: HETU_WORKFLOW
         value: deep_agent
+      # Render's proxy appends the caller's address to X-Forwarded-For.
+      - key: HETU_TRUSTED_PROXY_HOPS
+        value: 1
       - key: GROQ_API_KEY
         sync: false
       # The public URL of the static site below, with no trailing slash.

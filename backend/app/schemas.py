@@ -17,26 +17,39 @@ class HealthResponse(BaseModel):
 # Input caps keep one request small and its cost predictable.
 MAX_PROBLEM_CHARS = 1000
 MAX_DRAFT_CHARS = 4000
+MAX_QUESTION_CHARS = 1000
+MAX_CHALLENGE_CHARS = 600
+
+
+def _require_content(value: str) -> str:
+    if not value.strip():
+        raise ValueError("This field is empty.")
+    return value
+
+
+class Challenge(BaseModel):
+    """A student's disagreement with one question from an earlier analysis."""
+
+    step_text: str = Field(min_length=1, max_length=MAX_DRAFT_CHARS)
+    question: str = Field(min_length=1, max_length=MAX_QUESTION_CHARS)
+    reason: str = Field(min_length=1, max_length=MAX_CHALLENGE_CHARS)
+
+    _reason_has_content = field_validator("reason")(_require_content)
 
 
 class AnalyzeRequest(BaseModel):
     problem: str = Field(default="", max_length=MAX_PROBLEM_CHARS)
     draft: str = Field(min_length=1, max_length=MAX_DRAFT_CHARS)
+    challenge: Challenge | None = None
 
-    @field_validator("draft")
-    @classmethod
-    def _draft_has_content(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("The draft is empty.")
-        return value
+    _draft_has_content = field_validator("draft")(_require_content)
 
 
 class Span(BaseModel):
-    """Character offsets into the student's draft. `end` is exclusive.
+    """Offsets into the student's draft, counted in Unicode code points. `end` is exclusive.
 
-    Python counts code points and JavaScript counts UTF-16 units. They agree
-    for ordinary math text such as "n²" and "√". Revisit before accepting
-    characters outside the Basic Multilingual Plane.
+    JavaScript strings count UTF-16 units instead. The frontend converts in
+    `frontend/src/lib/spans.ts` before it highlights or selects text.
     """
 
     start: int = Field(ge=0)
@@ -73,6 +86,15 @@ class Observation(BaseModel):
     hint: str | None = None
 
 
+class ChallengeResult(BaseModel):
+    """How the workflow answered a student's challenge."""
+
+    # "withdrawn": the challenged step is no longer questioned.
+    # "maintained": the same step is still questioned.
+    outcome: Literal["withdrawn", "maintained"]
+    response: str
+
+
 class Analysis(BaseModel):
     # "sample" marks hand-written fixture content. "live" marks a result
     # produced by the model workflow for this request.
@@ -81,3 +103,5 @@ class Analysis(BaseModel):
     edges: list[Edge]
     observations: list[Observation]
     limitations: list[str]
+    # Present only when the request carried a challenge.
+    challenge: ChallengeResult | None = None

@@ -12,6 +12,7 @@ from langchain_groq import ChatGroq
 from app import agents
 from app.agents import AnalysisError, DraftAnalysis, Gap, Step, to_analysis
 from app.config import Settings
+from app.schemas import Challenge
 from tests.fakes import ScriptedChatModel, tool_call
 
 PROBLEM = "Prove that if the integer n² is even, then n is even."
@@ -30,7 +31,7 @@ GAP = {
 }
 
 
-# --- to_analysis: the deterministic clean-up ---------------------------------
+# to_analysis: the deterministic clean-up
 
 
 def test_to_analysis_builds_ids_spans_edges_and_one_observation():
@@ -89,7 +90,7 @@ def test_to_analysis_rejects_an_empty_answer():
         to_analysis(DRAFT, DraftAnalysis(steps=[]))
 
 
-# --- Deep Agents workflow with a scripted model ------------------------------
+# Deep Agents workflow with a scripted model
 
 
 def test_deep_agent_consults_the_critic_then_reports_the_gap():
@@ -115,7 +116,7 @@ def test_deep_agent_consults_the_critic_then_reports_the_gap():
 def test_a_failed_attempt_runs_the_fallback():
     attempts = 0
 
-    async def flaky(problem: str, draft: str):
+    async def flaky(problem: str, draft: str, challenge=None):
         nonlocal attempts
         attempts += 1
         if attempts == 1:
@@ -130,7 +131,7 @@ def test_a_failed_attempt_runs_the_fallback():
 def test_a_failing_fallback_is_not_retried_again():
     attempts = 0
 
-    async def broken(problem: str, draft: str):
+    async def broken(problem: str, draft: str, challenge=None):
         nonlocal attempts
         attempts += 1
         raise RuntimeError("still failing")
@@ -147,7 +148,7 @@ def test_deep_agent_can_finish_without_a_gap():
     assert len(model.seen) == 1
 
 
-# --- The real Groq integration class, with the network call replaced ---------
+# The real Groq integration class, with the network call replaced
 
 
 @pytest.fixture
@@ -220,3 +221,128 @@ def test_the_direct_workflow_retries_itself_once(groq_requests):
 
     assert analysis.observations == []
     assert len(captured) == 2
+
+
+# Source spans: exact text only
+
+
+def test_a_step_matches_across_line_breaks_in_the_draft():
+    draft = "Assume n² = 2k\nfor some integer k.   Then n is even."
+    steps = [Step(type="assumption", text="Assume n² = 2k for some integer k.")]
+
+    span = to_analysis(draft, DraftAnalysis(steps=steps)).nodes[0].span
+
+    assert span is not None
+    assert draft[span.start : span.end] == "Assume n² = 2k\nfor some integer k."
+
+
+def test_an_out_of_order_step_is_matched_only_when_its_text_is_unique():
+    draft = "n is even. So n² is even. Hence n is even."
+    steps = [
+        Step(type="conclusion", text="Hence n is even."),
+        Step(type="inference", text="So n² is even."),  # earlier in the draft, occurs once
+        Step(type="claim", text="n is even."),  # earlier in the draft, occurs twice
+    ]
+
+    nodes = to_analysis(draft, DraftAnalysis(steps=steps)).nodes
+
+    assert draft[nodes[1].span.start : nodes[1].span.end] == "So n² is even."
+    assert nodes[2].span is None
+
+
+def test_a_reworded_step_gets_no_span_even_when_similar_text_exists():
+    steps = [Step(type="inference", text="Then n equals √(2k)")]  # the draft says "n = √(2k)"
+    analysis = to_analysis(DRAFT, DraftAnalysis(steps=steps))
+    assert analysis.nodes[0].span is None
+    assert any("could not be matched" in item for item in analysis.limitations)
+
+
+def test_an_empty_step_gets_no_span():
+    steps = [Step(type="claim", text="   ")]
+    assert to_analysis(DRAFT, DraftAnalysis(steps=steps)).nodes[0].span is None
+
+
+# Challenges
+
+CHALLENGE = Challenge(
+    step_text="so n must be even.",
+    question=GAP["question"],
+    reason="A square root of an even number is even.",
+)
+
+
+def test_a_challenge_is_maintained_when_the_same_step_is_still_questioned():
+    output = DraftAnalysis(steps=STEPS, gap=GAP, challenge_response="  The draft still does not say why.  ")
+    result = to_analysis(DRAFT, output, CHALLENGE).challenge
+    assert result.outcome == "maintained"
+    assert result.response == "The draft still does not say why."
+
+
+def test_a_challenge_is_withdrawn_when_no_gap_remains():
+    output = DraftAnalysis(steps=STEPS, gap=None, challenge_response="You are right, that step is routine.")
+    analysis = to_analysis(DRAFT, output, CHALLENGE)
+    assert analysis.challenge.outcome == "withdrawn"
+    assert analysis.observations == []
+
+
+def test_a_challenge_is_withdrawn_when_the_question_moves_to_another_step():
+    output = DraftAnalysis(steps=STEPS, gap={**GAP, "step": 2})
+    analysis = to_analysis(DRAFT, output, CHALLENGE)
+    assert analysis.challenge.outcome == "withdrawn"
+    assert analysis.observations[0].target == "n2"
+
+
+def test_a_challenge_outcome_follows_the_analysis_not_the_models_summary():
+    # The model claims to withdraw but still reports the gap. The gap wins.
+    output = DraftAnalysis(steps=STEPS, gap=GAP, challenge_response="I withdraw the question.")
+    assert to_analysis(DRAFT, output, CHALLENGE).challenge.outcome == "maintained"
+
+
+def test_a_challenge_gets_a_default_response_when_the_model_gives_none():
+    result = to_analysis(DRAFT, DraftAnalysis(steps=STEPS, gap=None), CHALLENGE).challenge
+    assert result.response
+
+
+def test_an_analysis_without_a_challenge_has_no_challenge_result():
+    assert to_analysis(DRAFT, DraftAnalysis(steps=STEPS, gap=GAP)).challenge is None
+
+
+def test_the_challenge_reaches_the_model_with_rules_for_both_outcomes():
+    message = agents._user_message(PROBLEM, DRAFT, CHALLENGE)
+    assert CHALLENGE.reason in message
+    assert CHALLENGE.step_text in message
+    assert "withdraw the question" in message
+    assert "Keep the gap" in message
+    assert "Neither of you is assumed to be right" in message
+    # A plain analysis carries none of this.
+    assert "challenge" not in agents._user_message(PROBLEM, DRAFT)
+
+
+def test_deep_agent_reconsiders_a_challenged_step():
+    model = ScriptedChatModel(
+        script=[
+            tool_call(
+                "submit_analysis",
+                {"steps": STEPS, "gap": None, "challenge_response": "That step is routine. I withdraw the question."},
+            )
+        ]
+    )
+
+    analysis = asyncio.run(agents._deep_agent_analyzer(model)(PROBLEM, DRAFT, CHALLENGE))
+
+    assert analysis.challenge.outcome == "withdrawn"
+    assert CHALLENGE.reason in model.seen[0][1].content
+    # The draft itself is sent unchanged.
+    assert f"<draft>\n{DRAFT}\n</draft>" in model.seen[0][1].content
+
+
+def test_direct_workflow_reconsiders_a_challenged_step(groq_requests):
+    captured, replies = groq_requests
+    replies.append(AIMessage(content=json.dumps({"steps": STEPS, "gap": GAP, "challenge_response": "Still open."})))
+
+    settings = Settings(llm_provider="groq", llm_model="openai/gpt-oss-120b", workflow="direct")
+    analysis = asyncio.run(agents.build_analyzer(settings)(PROBLEM, DRAFT, CHALLENGE))
+
+    assert analysis.challenge.outcome == "maintained"
+    assert analysis.challenge.response == "Still open."
+    assert CHALLENGE.reason in captured[0]["messages"][1].content
