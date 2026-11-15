@@ -1,4 +1,4 @@
-"""Hetu API: `GET /health` and `POST /analyze`."""
+"""Hetu API: `GET /health`, `POST /chat`, and `POST /analyze`."""
 
 import asyncio
 import logging
@@ -12,7 +12,8 @@ from app.agents import Analyzer, build_analyzer
 from app.config import get_settings
 from app.limits import RequestLimiter, client_address
 from app.llm import InferenceNotConfigured
-from app.schemas import Analysis, AnalyzeRequest, HealthResponse
+from app.schemas import Analysis, AnalyzeRequest, ChatRequest, ChatResponse, HealthResponse
+from app.tutor import Tutor, build_tutor
 
 logger = logging.getLogger("hetu")
 settings = get_settings()
@@ -62,6 +63,22 @@ def get_analyzer() -> Analyzer:
         raise HTTPException(503, "Live analysis is not available on this server.") from None
 
 
+@lru_cache
+def _cached_tutor() -> Tutor:
+    return build_tutor(get_settings())
+
+
+def get_tutor() -> Tutor:
+    """Dependency that provides the learning system, or answers 503 if it cannot be built."""
+    try:
+        return _cached_tutor()
+    except InferenceNotConfigured:
+        raise HTTPException(503, "Hetu is not configured on this server.") from None
+    except Exception:
+        logger.exception("Could not build the learning system")
+        raise HTTPException(503, "Hetu is not available on this server.") from None
+
+
 @app.get("/health")
 def health() -> HealthResponse:
     return HealthResponse(status="ok")
@@ -83,3 +100,19 @@ async def analyze(request: AnalyzeRequest, analyzer: Annotated[Analyzer, Depends
     except Exception:
         logger.exception("Analysis failed")
         raise HTTPException(502, "The analysis could not be completed. Please try again.") from None
+
+
+@app.post("/chat", dependencies=[Depends(enforce_limits)])
+async def chat(request: ChatRequest, tutor: Annotated[Tutor, Depends(get_tutor)]) -> ChatResponse:
+    """Answer one turn of a learning conversation.
+
+    The server keeps no session. The request carries the recent turns and the
+    session notes, and the response returns the updated notes.
+    """
+    try:
+        return await asyncio.wait_for(tutor(request), timeout=settings.analyze_timeout_seconds)
+    except TimeoutError:
+        raise HTTPException(504, "Hetu took too long to answer. Please try again.") from None
+    except Exception:
+        logger.exception("Chat turn failed")
+        raise HTTPException(502, "Hetu could not answer. Please try again.") from None

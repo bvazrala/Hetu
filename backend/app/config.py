@@ -39,11 +39,11 @@ class Settings(BaseSettings):
     # "direct": one structured model call. Simpler, faster, no second opinion.
     workflow: Literal["deep_agent", "direct"] = "deep_agent"
 
-    # Upper bound on one analysis, in seconds.
+    # Upper bound on one chat turn or one analysis, in seconds.
     analyze_timeout_seconds: float = 60.0
 
-    # Limits on POST /analyze. The first is per client address, the second
-    # is shared by all clients and bounds what one day can cost.
+    # Limits on POST /chat and POST /analyze together. The first is per
+    # client address. The second is shared by all clients.
     rate_limit_per_minute: int = 20
     daily_analysis_limit: int = 500
 

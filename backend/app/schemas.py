@@ -1,8 +1,8 @@
 """Typed shapes of the API's requests and responses.
 
-`Analysis` is what `POST /analyze` returns. The hand-written sample in
-`examples/sample_proofs.json` uses the same shape, and a test keeps the two
-in step. The TypeScript mirror of these types is `frontend/src/lib/types.ts`.
+`ChatResponse` is what `POST /chat` returns and `Analysis` is what
+`POST /analyze` returns. The TypeScript mirror of these types is
+`frontend/src/lib/types.ts`.
 """
 
 from typing import Literal
@@ -105,3 +105,104 @@ class Analysis(BaseModel):
     limitations: list[str]
     # Present only when the request carried a challenge.
     challenge: ChallengeResult | None = None
+
+
+# Conversation limits. A request carries recent turns only, so its size and
+# cost stay bounded however long the session runs.
+MAX_MESSAGE_CHARS = 6000
+MAX_MESSAGES = 24
+MAX_NOTE_CHARS = 200
+MAX_NOTES = 8
+
+Specialist = Literal["mathematics", "science", "programming", "humanities", "logic"]
+
+# What Hetu decided to do in a turn. Internal: the student sees the reply, not this label.
+Action = Literal[
+    "teach",
+    "explain",
+    "demonstrate",
+    "explore",
+    "inspect_reasoning",
+    "challenge_assumption",
+    "correct_misconception",
+    "practice",
+    "check_understanding",
+    "answer_directly",
+    "reconsider",
+]
+
+
+class ChatMessage(BaseModel):
+    role: Literal["student", "hetu"]
+    content: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARS)
+
+
+class LearningState(BaseModel):
+    """Rough notes about one session. They are estimates, not measurements."""
+
+    topic: str | None = Field(default=None, max_length=MAX_NOTE_CHARS)
+    goal: str | None = Field(default=None, max_length=MAX_NOTE_CHARS)
+    concepts: list[str] = Field(default_factory=list, description="Concepts discussed so far.")
+    # Only what the student has shown in their own messages, not what was explained to them.
+    understood: list[str] = Field(default_factory=list, description="What the student has demonstrated.")
+    misconceptions: list[str] = Field(default_factory=list, description="Possible mix-ups. Uncertain.")
+
+    @field_validator("concepts", "understood", "misconceptions")
+    @classmethod
+    def _keep_notes_short(cls, notes: list[str]) -> list[str]:
+        return [note.strip()[:MAX_NOTE_CHARS] for note in notes if note.strip()][:MAX_NOTES]
+
+
+class WorkspaceContext(BaseModel):
+    """The student's workspace draft, when they chose to share it with a message."""
+
+    problem: str = Field(default="", max_length=MAX_PROBLEM_CHARS)
+    draft: str = Field(min_length=1, max_length=MAX_DRAFT_CHARS)
+
+
+class ProofContext(BaseModel):
+    """The open question from the latest proof inspection, so a disagreement can be reconsidered."""
+
+    problem: str = Field(default="", max_length=MAX_PROBLEM_CHARS)
+    draft: str = Field(min_length=1, max_length=MAX_DRAFT_CHARS)
+    step_text: str = Field(min_length=1, max_length=MAX_DRAFT_CHARS)
+    question: str = Field(min_length=1, max_length=MAX_QUESTION_CHARS)
+
+
+class ChatRequest(BaseModel):
+    messages: list[ChatMessage] = Field(min_length=1, max_length=MAX_MESSAGES)
+    learning_state: LearningState | None = None
+    workspace: WorkspaceContext | None = None
+    proof_context: ProofContext | None = None
+
+    @field_validator("messages")
+    @classmethod
+    def _student_speaks_last(cls, messages: list[ChatMessage]) -> list[ChatMessage]:
+        if messages[-1].role != "student":
+            raise ValueError("The last message must come from the student.")
+        return messages
+
+
+class Inspection(BaseModel):
+    """A proof analysis together with the exact text it was made for."""
+
+    problem: str
+    draft: str
+    analysis: Analysis
+
+
+class ToolCheck(BaseModel):
+    """The result of one deterministic check. This is computed, not a model's opinion."""
+
+    tool: str
+    result: str
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    action: Action
+    # Who answered: the lead first, then anyone it consulted. Empty when the coach answered alone.
+    specialists: list[Specialist]
+    learning_state: LearningState
+    inspection: Inspection | None = None
+    checks: list[ToolCheck] = Field(default_factory=list)

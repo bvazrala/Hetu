@@ -42,6 +42,99 @@
 
   /* Typeset math should match the size of the text around it. */
   .katex {
-    font-size: 1.05em;
+    font-size: 1em;
+  }
+}
+
+/* Typography for Hetu's replies, which arrive as Markdown. */
+@layer components {
+  .hetu-prose {
+    font-family: var(--font-serif);
+    font-size: 1.125rem;
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+  }
+  .hetu-prose > * + * {
+    margin-top: 0.85em;
+  }
+  .hetu-prose h4,
+  .hetu-prose h5 {
+    font-weight: 600;
+    line-height: 1.3;
+    margin-top: 1.4em;
+  }
+  .hetu-prose h4 {
+    font-size: 1.25rem;
+  }
+  .hetu-prose h5 {
+    font-size: 1.1rem;
+  }
+  .hetu-prose ul,
+  .hetu-prose ol {
+    padding-left: 1.5em;
+  }
+  .hetu-prose ul {
+    list-style: disc;
+  }
+  .hetu-prose ol {
+    list-style: decimal;
+  }
+  .hetu-prose li + li,
+  .hetu-prose li > ul,
+  .hetu-prose li > ol {
+    margin-top: 0.3em;
+  }
+  .hetu-prose strong {
+    font-weight: 600;
+  }
+  .hetu-prose a {
+    color: var(--color-accent);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .hetu-prose code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.85em;
+    background-color: color-mix(in srgb, var(--color-rule) 45%, transparent);
+    border-radius: 4px;
+    padding: 0.1em 0.35em;
+  }
+  .hetu-prose pre {
+    overflow-x: auto;
+    border: 1px solid var(--color-rule);
+    border-radius: 6px;
+    background-color: var(--color-surface);
+    padding: 0.9rem 1rem;
+    font-size: 0.9rem;
+    line-height: 1.55;
+  }
+  .hetu-prose pre code {
+    background: none;
+    padding: 0;
+    font-size: inherit;
+  }
+  .hetu-prose blockquote {
+    border-left: 3px solid var(--color-rule);
+    padding-left: 1em;
+    color: var(--color-muted);
+  }
+  .hetu-prose table {
+    border-collapse: collapse;
+    font-family: var(--font-sans);
+    font-size: 0.95rem;
+  }
+  .hetu-prose th,
+  .hetu-prose td {
+    border: 1px solid var(--color-rule);
+    padding: 0.35em 0.7em;
+    text-align: left;
+  }
+  .hetu-prose hr {
+    border-color: var(--color-rule);
+  }
+  .hetu-prose .katex-display {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.2em 0;
   }
 }

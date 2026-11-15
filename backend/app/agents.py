@@ -1,4 +1,8 @@
-"""The reasoning workflow: problem and draft in, `Analysis` out.
+"""Proof inspection: problem and draft in, `Analysis` out.
+
+This is one tool of the learning system in `app/tutor.py`, used when a
+student has written out a mathematical argument. It is also served directly
+by `POST /analyze` for the workspace.
 
 Data flow:
 
@@ -181,7 +185,7 @@ Analyzer = Callable[[str, str, Challenge | None], Awaitable[Analysis]]
 # Deep Agents gives every agent file tools by default. A proof draft needs
 # none of them, and extra tools cost tokens and invite wrong tool calls.
 _UNUSED_TOOLS = frozenset({"ls", "read_file", "write_file", "edit_file", "delete", "glob", "grep", "execute"})
-_PROFILE = HarnessProfile(
+HARNESS_PROFILE = HarnessProfile(
     excluded_tools=_UNUSED_TOOLS,
     general_purpose_subagent=GeneralPurposeSubagentProfile(enabled=False),
 )
@@ -203,7 +207,7 @@ def build_deep_agent(model: BaseChatModel, profile_key: str | None = None):
     tools are switched off for that model.
     """
     if profile_key:
-        register_harness_profile(profile_key, _PROFILE)
+        register_harness_profile(profile_key, HARNESS_PROFILE)
     return create_deep_agent(
         model=model,
         system_prompt=ORCHESTRATOR_PROMPT,

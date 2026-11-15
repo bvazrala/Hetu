@@ -52,3 +52,29 @@ export function splitMath(text: string): Segment[] {
   if (last < text.length) segments.push(...splitBareCommands(text.slice(last)))
   return segments
 }
+
+// Splits text into code and everything else, so math delimiters inside code are left alone.
+const CODE = /(```[\s\S]*?```|`[^`\n]*`)/
+
+/**
+ * Prepares model-written math for the Markdown math plugin.
+ *
+ * Models write math as $...$, $$...$$, \(...\), or \[...\]. The plugin reads
+ * only the dollar forms, and it treats $$...$$ as a displayed equation only
+ * when the dollar signs sit on their own lines. Both are adjusted here.
+ */
+export function normalizeMath(text: string): string {
+  // One pass for both display forms, so an equation is never wrapped twice.
+  const display = (_: string, bracket?: string, dollars?: string) =>
+    `\n\n$$\n${(bracket ?? dollars ?? '').trim()}\n$$\n\n`
+  return text
+    .split(CODE)
+    .map((part, index) =>
+      index % 2 === 1
+        ? part
+        : part
+            .replace(/\\\[([\s\S]+?)\\\]|\$\$([\s\S]+?)\$\$/g, display)
+            .replace(/\\\(([\s\S]+?)\\\)/g, (_, math: string) => `$${math}$`),
+    )
+    .join('')
+}

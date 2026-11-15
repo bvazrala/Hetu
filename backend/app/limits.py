@@ -1,4 +1,4 @@
-"""Request limits for the endpoint that costs money.
+"""Request limits for the endpoints that cost money.
 
 Counts live in memory, so they reset when the process restarts and are not
 shared between processes. These limits slow abuse down. They do not cap the
@@ -38,7 +38,7 @@ class RequestLimiter:
         if len(recent) >= self.per_minute:
             return "Too many requests. Wait a minute and try again."
         if self._count_today >= self.per_day:
-            return "Hetu has reached its daily analysis limit. Try again tomorrow."
+            return "Hetu has reached its daily limit. Try again tomorrow."
 
         recent.append(now)
         self._count_today += 1

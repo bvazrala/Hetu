@@ -65,3 +65,63 @@ export interface Example {
   notes: string
   sample_analysis?: Analysis
 }
+
+export type Specialist = 'mathematics' | 'science' | 'programming' | 'humanities' | 'logic'
+
+export interface ChatMessage {
+  role: 'student' | 'hetu'
+  content: string
+}
+
+/** Rough notes about one session. They are estimates, not measurements. */
+export interface LearningState {
+  topic: string | null
+  goal: string | null
+  concepts: string[]
+  /** Only what the student has shown in their own messages. */
+  understood: string[]
+  /** Possible mix-ups. Uncertain. */
+  misconceptions: string[]
+}
+
+export interface WorkspaceContext {
+  problem: string
+  draft: string
+}
+
+/** The open question from the latest proof inspection. */
+export interface ProofContext {
+  problem: string
+  draft: string
+  step_text: string
+  question: string
+}
+
+export interface ChatRequest {
+  messages: ChatMessage[]
+  learning_state: LearningState | null
+  workspace?: WorkspaceContext
+  proof_context?: ProofContext
+}
+
+/** A proof analysis together with the exact text it was made for. */
+export interface ProofInspection {
+  problem: string
+  draft: string
+  analysis: Analysis
+}
+
+/** The result of one deterministic check. Computed, not a model's opinion. */
+export interface ToolCheck {
+  tool: string
+  result: string
+}
+
+export interface ChatResponse {
+  reply: string
+  action: string
+  specialists: Specialist[]
+  learning_state: LearningState
+  inspection: ProofInspection | null
+  checks: ToolCheck[]
+}

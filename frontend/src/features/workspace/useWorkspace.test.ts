@@ -49,7 +49,7 @@ describe('inspecting a draft', () => {
 
     expect(workspace().error).toBe('The analysis took too long.')
     expect(workspace().draft).toBe('My own draft.')
-    expect(workspace().mode).toBe('freeform')
+    expect(workspace().mode).not.toBe('structured')
     expect(workspace().inspection).toBeNull()
   })
 
@@ -79,7 +79,7 @@ describe('a response that arrives after the draft changed', () => {
     act(() => workspace().setDraft(DRAFT + ' Also, n is positive.'))
     await act(async () => request.resolve(LIVE_ANALYSIS))
 
-    expect(workspace().mode).toBe('freeform')
+    expect(workspace().mode).not.toBe('structured')
     expect(workspace().inspection).toBeNull()
     expect(workspace().stale).toBe(false)
     expect(workspace().notice).toBe(DISCARDED_NOTICE)

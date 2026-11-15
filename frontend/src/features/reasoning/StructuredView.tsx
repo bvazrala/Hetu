@@ -38,7 +38,7 @@ export function StructuredView(props: Props) {
         <p className="mx-auto mt-2 max-w-md text-sm text-muted">
           {stale
             ? 'The earlier feedback no longer matches what you wrote, so it is not shown.'
-            : 'Switch to Freeform, write your reasoning, and select Inspect reasoning.'}
+            : 'Share a proof in the conversation, or write one in Freeform and select Inspect reasoning.'}
         </p>
         {stale && (
           <button

@@ -4,7 +4,7 @@ import { AnalyzeError, analyzeDraft } from '../../lib/api'
 import { demoExample, findSampleAnalysis } from '../../lib/examples'
 import { toStringRange, type StringRange } from '../../lib/spans'
 import { clearWorkspace, loadWorkspace, saveWorkspace } from '../../lib/storage'
-import type { Analysis, Observation, ReasoningNode } from '../../lib/types'
+import type { Analysis, Observation, ProofInspection, ReasoningNode } from '../../lib/types'
 
 /** An analysis together with the exact text it was made for. */
 export interface Inspection {
@@ -35,14 +35,15 @@ function failureMessage(error: unknown): string {
 /**
  * Holds the student's work and everything known about it.
  *
- * The problem and draft live here, above both views, and only typing,
- * loading the example, and clearing the workspace ever write to them.
+ * The problem and draft live here, above every view. Only typing, loading
+ * the example, opening a proof from the conversation, and clearing the
+ * workspace ever write to them.
  */
 export function useWorkspace() {
   const [saved] = useState(loadWorkspace)
   const [problem, setProblemState] = useState(saved?.problem ?? '')
   const [draft, setDraftState] = useState(saved?.draft ?? '')
-  const [mode, setMode] = useState<Mode>('freeform')
+  const [mode, setMode] = useState<Mode>('conversation')
 
   const [inspection, setInspection] = useState<Inspection | null>(null)
   const [busy, setBusy] = useState<'inspect' | 'challenge' | null>(null)
@@ -165,6 +166,14 @@ export function useWorkspace() {
     setResultVersion((version) => version + 1)
   }
 
+  /** Loads a proof that was inspected in the conversation, and shows its graph. */
+  function openInspection({ problem: nextProblem, draft: nextDraft, analysis }: ProofInspection) {
+    replaceWorkspace(nextProblem, nextDraft)
+    setInspection({ problem: nextProblem, draft: nextDraft, analysis, fallbackReason: null, challengeReason: null })
+    setResultVersion((version) => version + 1)
+    setMode('structured')
+  }
+
   /** Returns to the editor with the step's text selected, when Hetu knows where it is. */
   function reviseStep(node: ReasoningNode) {
     setMode('freeform')
@@ -192,6 +201,7 @@ export function useWorkspace() {
     inspect,
     challenge,
     reviseStep,
+    openInspection,
     loadExample,
     reset,
   }

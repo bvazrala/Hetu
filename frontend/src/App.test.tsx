@@ -14,8 +14,13 @@ const analyze = vi.mocked(analyzeDraft)
 
 const draftField = () => screen.getByLabelText<HTMLTextAreaElement>('Your reasoning')
 
+async function openFreeform() {
+  await userEvent.click(screen.getByRole('button', { name: 'Freeform' }))
+}
+
 async function inspectTheExample() {
   render(<App />)
+  await openFreeform()
   await userEvent.click(screen.getByRole('button', { name: 'Try an example' }))
   await userEvent.click(screen.getByRole('button', { name: 'Inspect reasoning' }))
   await screen.findByRole('heading', { name: 'Analysis' })
@@ -77,12 +82,14 @@ describe('the whole loop', () => {
 
   it('restores saved work after a reload and can clear it', async () => {
     const first = render(<App />)
+    await openFreeform()
     await userEvent.type(draftField(), 'A draft worth keeping.')
     // The save is delayed, so wait for it before "reloading".
     await vi.waitFor(() => expect(window.localStorage.getItem('hetu.workspace.v1')).toContain('worth keeping'))
     first.unmount()
 
     render(<App />)
+    await openFreeform()
     expect(draftField().value).toBe('A draft worth keeping.')
 
     await userEvent.click(screen.getByRole('button', { name: 'Clear workspace' }))

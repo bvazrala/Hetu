@@ -1,6 +1,7 @@
-export type Mode = 'freeform' | 'structured'
+export type Mode = 'conversation' | 'freeform' | 'structured'
 
 const MODES: { value: Mode; label: string }[] = [
+  { value: 'conversation', label: 'Conversation' },
   { value: 'freeform', label: 'Freeform' },
   { value: 'structured', label: 'Structured' },
 ]
@@ -12,7 +13,7 @@ interface Props {
 
 export function ModeToggle({ mode, onChange }: Props) {
   return (
-    <div role="group" aria-label="View" className="inline-flex rounded-md border border-rule bg-surface p-0.5">
+    <div role="group" aria-label="View" className="inline-flex w-fit rounded-md border border-rule bg-surface p-0.5">
       {MODES.map(({ value, label }) => {
         const active = mode === value
         return (

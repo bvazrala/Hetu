@@ -13,6 +13,7 @@ interface Props {
   onDraftChange: (value: string) => void
   onLoadExample: () => void
   onInspect: () => void
+  onDiscuss: () => void
   onReset: () => void
 }
 
@@ -35,6 +36,7 @@ export function FreeformEditor({
   onDraftChange,
   onLoadExample,
   onInspect,
+  onDiscuss,
   onReset,
 }: Props) {
   const draftField = useRef<HTMLTextAreaElement>(null)
@@ -110,6 +112,14 @@ export function FreeformEditor({
         </button>
         <button
           type="button"
+          onClick={onDiscuss}
+          disabled={!canInspect}
+          className="rounded-md border border-accent px-5 py-2.5 font-medium text-accent transition-colors hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Discuss with Hetu
+        </button>
+        <button
+          type="button"
           onClick={onLoadExample}
           disabled={busy}
           className="rounded-md border border-accent px-5 py-2.5 font-medium text-accent transition-colors hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
@@ -161,8 +171,8 @@ export function FreeformEditor({
           <p className="border-l-2 border-flag pl-3">{notice}</p>
         ) : (
           <p className="text-muted">
-            Hetu asks a model to read your draft and question one step. It does not write the proof. Shortcut: Ctrl
-            or ⌘ with Enter.
+            A place for longer work. Inspect reasoning maps a proof into steps and questions one of them. Discuss
+            with Hetu takes this draft into the conversation. Shortcut to inspect: Ctrl or ⌘ with Enter.
           </p>
         )}
       </div>
