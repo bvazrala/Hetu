@@ -26,7 +26,7 @@ export function WorkspacePanel({ view, onViewChange, onClose, hasStructure, side
     <aside
       id="workspace"
       aria-labelledby="workspace-heading"
-      className="flex min-h-0 w-full flex-col bg-paper lg:w-[min(46rem,50%)] lg:shrink-0 lg:border-l lg:border-rule"
+      className="flex min-h-0 w-full flex-col lg:w-[min(46rem,50%)] lg:shrink-0 lg:border-l lg:border-rule"
     >
       <div className="flex flex-wrap items-center gap-3 border-b border-rule px-5 py-3 sm:px-8 lg:px-6">
         <h2 id="workspace-heading" className="sr-only font-serif text-lg font-semibold sm:not-sr-only">

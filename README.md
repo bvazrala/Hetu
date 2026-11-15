@@ -1,136 +1,117 @@
 # Hetu
 
-Hetu is an open source learning environment for any academic subject. A student says what they are working on, and Hetu works out what kind of help fits that moment: an explanation, an example, a hint, a question about their reasoning, or a second look at its own feedback.
+<!-- Thumbnail goes here -->
 
-Live site: https://hetu-cin8.onrender.com
+**An AI learning companion that knows when to explain and when to step back.**
 
-The name comes from the Sanskrit word हेतु, which is associated with reason, cause, or the ground of an inference.
+Live: https://hetu-cin8.onrender.com
 
-## Overview
+हेतु (hetu) is Sanskrit for reason, or the ground of an inference. That is what Hetu helps students build.
 
-Students can use Hetu as guests, with nothing saved, or sign in to keep their conversations, notes, and workspace. The interface is a conversation with a workspace beside it. Behind it, a learning coach plans each turn and a subject specialist writes the reply.
+## The problem
 
-## Educational purpose
+AI makes it easy to get an answer and easy to skip the learning. Most tools respond the same way to every message. A chatbot explains everything. A Socratic tutor only asks questions. A checker only looks for mistakes. Each one fails the moment a student needs one of the others.
 
-Most AI tools respond the same way to every message. A chatbot explains. A Socratic tutor asks questions. A checker looks for mistakes. Each fails when the student needs one of the other two.
+Real tutors adapt. They explain when you are lost. They hold back when you are close. They point at the exact step that does not follow and let you fix it yourself.
 
-Hetu decides first and answers second. A student who says "I have no idea how classes work" is taught. A student who writes out a proof gets feedback on the step that does not follow, without the proof being finished for them. A student who disagrees with that feedback gets a real reconsideration. The student can also choose the kind of help directly.
+## What Hetu does
 
-## Implemented features
+Hetu decides how to help before it answers.
 
-Learning
+- **Lost?** Hetu explains, with an example at your level.
+- **Working through a problem?** Hetu gives a hint and leaves the steps to you.
+- **Wrote a proof or an argument?** Hetu finds the step that does not follow and asks about it. It does not finish the work for you.
+- **Think Hetu is wrong?** Say so. It reconsiders for real instead of repeating itself.
 
-- **Conversation.** A chat that keeps context across turns. Replies render Markdown, typeset math, and formatted code.
-- **Starting points.** Three optional starting points: understand something, work through a problem, or examine my reasoning. The choice is sent with every message of the session.
-- **Student-chosen help.** A selector in the composer asks for one kind of help with the next message: explain, hint, check my reasoning, example, let me try, or challenge my assumption. The choice decides Hetu's action for that turn. After each reply, two fitting follow-ups are offered.
-- **Adaptive strategy.** Each turn starts with a plan: what the student needs, what Hetu should do, and who should answer. Level is judged from what the student has shown, not from vocabulary or one message.
-- **Five specialists.** Mathematics, science, programming, writing and humanities, and logic. Only the one that fits a turn is used, unless a question spans two subjects.
-- **Exact checks in mathematics.** Integer counterexample search and symbolic comparison of expressions. Results are shown apart from the reply and labelled as computed.
-- **A second reader in logic.** Before the logic specialist says an argument has a flaw, a second agent checks whether the flaw is really there.
-- **Graphs.** When a graph helps, Hetu describes one in a small `plot` block: functions of one variable, a range, labels, and marked points. The browser computes every point and draws it, so the curve is exact. Expressions are read by a fixed grammar of arithmetic and math functions; nothing is run as code. A description that cannot be drawn says why.
-- **Voice.** A microphone button dictates into the message box with the browser's speech recognition. The text can be edited and is never sent automatically. Each reply has **Listen**, with pause and stop, using the browser's speech synthesis; one reply plays at a time. Both are hidden or explained where a browser lacks them. In Chrome, dictated audio goes to the browser maker's speech service, not to Hetu.
-- **Session notes.** Four groups: discussed, shown by the student, possible misconceptions, and still exploring. Only the student's own words and work count as shown. The student can remove any note, and Hetu does not add it back.
+Students can also choose the kind of help directly: explain, hint, check my reasoning, example, let me try, or challenge my assumption. Hetu works across mathematics, science, programming, writing, the humanities, and logic.
 
-Workspace
+## Features
 
-- **Draft.** A panel for longer work, beside the conversation on wide screens and in its place on narrow ones. **Get feedback** sends the whole draft to the conversation. Selecting text offers **Ask about the selection**, which quotes it in the composer.
-- **Structure.** **Map the steps** lays out a proof or derivation step by step. A graph is drawn only for three or more steps with two or more dependencies. It is fitted to the panel, can be zoomed, and scrolls sideways when wider. Each step can be revised, asked about, or challenged. No step is ever marked as verified.
+**Learning**
+- Three starting points: understand something, work through a problem, or examine my reasoning.
+- Session notes track what was discussed, what the student showed, and possible misconceptions. Students can remove any note and Hetu respects that.
+- Exact math checks with SymPy. Counterexamples and symbolic comparisons are computed, not guessed, and shown apart from the reply.
+- Function plots drawn in the browser. The curve is computed point by point, so it is exact.
+- Typeset math, code, and tables in every reply.
 
-Accounts
+**Workspace**
+- A draft panel beside the conversation for longer work. Ask for feedback on the whole draft or on a selection.
+- **Map the steps** turns a proof into a graph of how each step depends on the others. Any step can be revised, questioned, or challenged.
 
-- **Sign-in.** Google, GitHub, and email with password, through Neon Auth. Email addresses are confirmed with a code. Forgotten passwords are reset with a code.
-- **Saved work.** A signed-in student's conversations, session notes, and workspace draft are saved as they change. Conversations can be reopened, renamed, and deleted from a history list.
-- **Guests.** Guests start immediately. Their work stays in the tab and is not sent to the database. If a guest signs in, Hetu asks before saving their current work to the account.
-- **Profile and deletion.** A display name can be set. **Delete my data** removes every conversation, note, draft, and the profile. Removing the sign-in itself depends on Neon Auth; the app reports whether it worked.
+**Voice**
+- Dictate a message, then edit it before sending.
+- Listen to any reply, with pause and stop.
 
-Interface
+**Accounts**
+- Use Hetu right away as a guest. Nothing is saved to the server.
+- Sign in with Google, GitHub, or email to keep conversations, notes, and drafts.
+- Guest work moves to an account only if the student says yes. **Delete my data** removes everything.
 
-- **Light and dark themes.** A button beside **Workspace** steps through system, light, and dark. The choice is remembered in the browser and applied before the page draws.
-- **First screen.** A headline, the three starting points, and on wide screens a hand-written example of Hetu answering a proof, over a slow WebGL shader in the theme's colors. The shader shows a still frame when the device asks for reduced motion, pauses in a hidden tab, and falls back to a gradient without WebGL. A signed-in student on a narrow screen also sees their three most recent conversations.
-- **Quiet status.** One word in the header says whether the conversation is saved. Server problems appear only when there is one.
-- **Accessibility.** Keyboard access throughout, a skip link, live regions for status, a text version of the graph, and reduced motion.
+**Interface**
+- A paper texture and serif type that feel like a notebook, not a dashboard.
+- Light and dark themes. Replies appear a few words at a time and the view stays at the start of each reply.
+- Keyboard access, screen reader labels, and reduced motion support throughout.
 
-## Architecture
+## How it works
 
 ```mermaid
 flowchart LR
-    subgraph Browser
-        CV[Conversation]
-        WS[Workspace]
-        SDK["Neon SDK"]
-    end
-    subgraph Neon
-        NA["Neon Auth"]
-        DA["Data API"]
-        PG[("Postgres with row-level security")]
-    end
-    subgraph Backend
-        API["FastAPI: /chat, /analyze, /health"]
-        CO["Coach: plans the turn"]
-        SP["One specialist writes the reply"]
-        TL["Math checks, second reader, proof inspection"]
-    end
-    PR[Model provider]
-
-    CV --- SDK
-    WS --- SDK
-    SDK -->|"sign-in"| NA
-    SDK -->|"own rows, with token"| DA
-    DA --> PG
-    NA --> PG
-    CV -->|"recent turns, notes, token"| API
-    API -.->|"verify token: public keys"| NA
-    API --> CO --> SP
-    SP -.-> TL
-    CO --> PR
-    SP --> PR
-    TL --> PR
+    B[Browser] -->|sign in| NA[Neon Auth]
+    B -->|own rows only| DA[Neon Data API] --> PG[(Postgres with row level security)]
+    B -->|recent turns and notes| API[FastAPI]
+    API --> C[Coach plans the turn]
+    C --> S[One specialist replies]
+    S -.-> T[Math checks and proof critic]
 ```
 
-One `POST /chat` turn, in `backend/app/tutor.py`:
+Each turn has three steps.
 
-1. **Plan.** The coach reads the conversation, the notes, and any help the student chose, and returns a typed plan. One structured model call.
-2. **Inspect, when called for.** If the student wrote out a proof, the inspection in `backend/app/agents.py` splits it into steps, and a critic subagent can overrule a suspected gap.
-3. **Reply.** The specialist named in the plan writes the reply. Specialists are LangChain Deep Agents with their own tools and subagents.
+1. **Plan.** A coach reads the conversation and returns a typed plan: what the student needs, what Hetu should do, and which specialist should answer.
+2. **Inspect.** If the student wrote a proof, it is split into steps. A critic agent double checks any gap before Hetu mentions it.
+3. **Reply.** The chosen specialist writes the answer, with its own tools.
 
-Design decisions:
+The model plans and ordinary code acts on the plan. If the student picks a kind of help, code enforces it. An ordinary turn takes two model calls.
 
-- **Code routes, the model plans.** The model fills in the plan and ordinary code acts on it. A help option the student chose sets the action in code.
-- **Few calls.** An ordinary turn is two model calls. A proof turn adds one to three.
-- **The API stays stateless.** The browser sends recent turns and notes with each request. Saved work goes from the browser to the Neon Data API, so the API never holds database credentials. This keeps one path for data and no duplicate endpoints.
-- **Security lives in the database.** Every table has row-level security keyed to the verified token. Child rows reference their conversation together with its owner, so no one can attach a row to someone else's conversation.
-- **The API checks identity only for limits.** It verifies Neon Auth tokens with Neon's public keys. A signed-in user is limited per account; anyone else per address.
-- **No code execution.** Running student code safely needs a sandbox, which is out of scope.
+## Why these tools
 
-## Technology stack
+| Tool | Why |
+| --- | --- |
+| **React and TypeScript** | The interface has many moving parts: a conversation, a workspace, a graph, and accounts. Types keep the browser in step with the API. |
+| **Vite** | Instant reloads in development and a small static build. |
+| **Tailwind CSS** | Every color is a token in one file. Themes swap values, so dark mode has no stray colors. |
+| **KaTeX and react-markdown** | Math looks like a textbook. Raw HTML in a reply is never rendered. |
+| **FastAPI and Pydantic** | Python is home to the agent and math libraries. Pydantic validates the model's plan before any code acts on it. |
+| **LangChain Deep Agents** | Specialists get their own tools and subagents, such as the proof critic, without a custom orchestration layer. |
+| **Groq with gpt-oss-120b** | An open weight model on very fast inference. Two calls per turn still feel instant. |
+| **SymPy** | Exact answers where a language model should not be trusted. |
+| **Neon Postgres** | Real Postgres that scales to zero when idle. The free plan covers a project at this stage. |
+| **Neon Auth** | Managed sign in built on Better Auth. Its tokens are understood by the database itself, so there is no separate auth server. |
+| **Neon Data API** | The browser reads and writes only its own rows. Security lives in the database, and the API never holds database credentials. |
+| **PyJWT** | Verifies Neon tokens with public keys, so limits apply per account. |
+| **Web Speech API** | Dictation and read aloud with no extra service or cost. |
+| **WebGL and SVG** | The landing shader and the plots are drawn on the device. Plot expressions are read by a fixed grammar and never run as code. |
+| **Render** | One blueprint deploys the site and the API. |
 
-| Part | Choice | Why it is here |
-| --- | --- | --- |
-| Frontend | React, TypeScript, Vite, Tailwind CSS | Component UI with type checking. Every color is a token in `frontend/src/index.css`, with one set of values per theme. |
-| Reply rendering | react-markdown, remark-gfm, remark-math, rehype-katex | Markdown, tables, math, and code. Raw HTML in a reply is not rendered. |
-| Accounts and data | Neon Auth (managed Better Auth), Neon Data API, `@neon/neon-js` | Sign-in, sessions, and per-user data access without a separate auth service. |
-| Database | Neon Postgres | Conversations, messages, notes, drafts, profiles. |
-| Backend | FastAPI, Uvicorn, Pydantic | A typed HTTP API. |
-| Agents | LangChain Deep Agents | Specialists, subagents, and the proof orchestrator. |
-| Math checks | SymPy | Symbolic comparison of expressions. |
-| Token checks | PyJWT with cryptography | Verifies Neon Auth's Ed25519 signatures. |
-| Model access | langchain-groq | The default model is `openai/gpt-oss-120b`, an open weight model on Groq. |
-| Tests | pytest, psycopg, Vitest, Testing Library | No automated test calls a model or Neon. |
+## Privacy and safety
 
-## Local setup
+- API keys and database credentials never reach the browser.
+- Every table has row level security. A user can reach only rows owned by their verified token. Tests confirm one user cannot read, change, or attach to another user's data.
+- Guests are never stored on the server.
+- Tokens and profile details are kept out of model prompts.
+- Hetu never claims a proof is formally verified. It is a language model and can be wrong.
 
-Prerequisites: [Node.js](https://nodejs.org/) 22.12 or newer and [uv](https://docs.astral.sh/uv/).
+## Run it locally
 
-Backend:
+You need [Node.js](https://nodejs.org/) 22.12 or newer and [uv](https://docs.astral.sh/uv/).
 
 ```bash
 cd backend
-cp .env.example .env    # then add GROQ_API_KEY
+cp .env.example .env    # add GROQ_API_KEY
 uv sync
 uv run uvicorn app.main:app --reload --port 8000
 ```
 
-Frontend, in a second terminal:
+In a second terminal:
 
 ```bash
 cd frontend
@@ -139,126 +120,39 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173. Without the Neon settings below, Hetu runs for guests only and shows no **Sign in** button.
+Open http://localhost:5173. Without Neon settings Hetu runs in guest mode. Every setting is described in `backend/.env.example` and `frontend/.env.example`.
 
-## Environment configuration
+### Accounts and database
 
-Backend, in `backend/.env` locally and in the Render service settings:
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `HETU_LLM_PROVIDER`, `HETU_LLM_MODEL` | unset | Model provider and model. Without them, `POST /chat` answers 503. |
-| `GROQ_API_KEY` | unset | Key for Groq. Secret. |
-| `HETU_LLM_TEMPERATURE` | `0` | Sampling temperature. |
-| `HETU_WORKFLOW` | `deep_agent` | Proof inspection: `deep_agent`, or `direct` with no critic. |
-| `HETU_ANALYZE_TIMEOUT_SECONDS` | `60` | Upper bound on one turn. |
-| `HETU_CORS_ORIGINS` | `http://localhost:5173` | Browser origins allowed to call the API. |
-| `HETU_RATE_LIMIT_PER_MINUTE` | `20` | Requests per client per minute. |
-| `HETU_DAILY_ANALYSIS_LIMIT` | `500` | Requests per day for everyone together. |
-| `HETU_DAILY_LIMIT_PER_GUEST` | `40` | Requests per day for one guest address. |
-| `HETU_DAILY_LIMIT_PER_USER` | `120` | Requests per day for one signed-in account. |
-| `HETU_TRUSTED_PROXY_HOPS` | `0` | Proxies that append to `X-Forwarded-For`. `1` on Render. |
-| `HETU_NEON_AUTH_URL` | unset | Neon Auth URL, used only to verify tokens. Public. |
-| `DATABASE_URL` | unset | Owner connection string, for the scripts on your machine only. Secret. Never set it on Render. |
-| `NEON_DATA_API_URL` | unset | For `scripts/check_isolation.py` only. |
-
-Frontend, in `frontend/.env.local` locally and in the Render static site settings. Every `VITE_` value is built into the page and is public:
-
-| Variable | Purpose |
-| --- | --- |
-| `VITE_API_BASE_URL` | Hetu's API, for example `http://localhost:8000`. |
-| `VITE_NEON_AUTH_URL` | Neon Auth URL from the Neon Console. |
-| `VITE_NEON_DATA_API_URL` | Data API URL from the Neon Console. |
-
-Neon Console settings:
-
-- **Auth:** enable it on the branch. Add `https://hetu-cin8.onrender.com` to trusted domains. Keep **Allow localhost** on for development only.
-- **Google:** Neon's shared credentials work for development. For production, create a Google OAuth client with the redirect URI `<Auth URL>/callback/google`.
-- **GitHub:** needs its own OAuth app, with the callback URL `<Auth URL>/callback/github`.
-- **Email:** enable sign-up with email and **Verify at sign-up** with **Verification code**. Neon's shared email sender supports codes, not links, and is rate limited. Production use needs a custom SMTP provider.
-- **Data API:** enable it with **Use Managed Better Auth**.
-
-## Database setup and migrations
-
-The schema is in `db/migrations`, one SQL file per change, applied in name order. Apply them after enabling Auth and the Data API, because the schema relies on the `authenticated` role and the `auth.user_id()` function that Neon creates then.
+1. In the Neon Console, enable Auth and the Data API (with **Use Managed Better Auth**). Add your site to trusted domains.
+2. Put the Auth and Data API URLs in `frontend/.env.local`, and the Auth URL in `backend/.env` as `HETU_NEON_AUTH_URL`.
+3. Put the owner connection string in `backend/.env` as `DATABASE_URL`. It is for your machine only. Never set it on Render.
+4. Apply the schema:
 
 ```bash
 cd backend
-# DATABASE_URL in backend/.env, from Connect in the Neon Console
-uv run python -m scripts.migrate --status
 uv run python -m scripts.migrate
 ```
 
-The runner records each applied file in the `hetu_meta` schema, which the Data API cannot reach. A file can also be pasted into the Neon SQL Editor.
+Check storage against the free plan with `uv run python -m scripts.usage_report`.
 
-Tables: `conversations`, `messages`, `learning_states`, `workspaces`, and `profiles`. Each row has an owner taken from the verified token. Messages cannot be edited. Deleting a conversation deletes its messages and notes. Text sizes are capped, and only small extras are stored with each reply, so the history is not duplicated.
-
-Usage on the Free plan: Neon's Free plan FAQ, checked in November 2026, lists 100 CU-hours of compute per project per month and 1 GB of storage per project. Compute that is idle for 5 minutes scales to zero. Reaching a monthly limit suspends compute until the next month; Hetu then keeps working for guests, and signed-in students see that saving is unavailable while their work stays in the tab. To check storage:
+## Tests
 
 ```bash
-uv run python -m scripts.usage_report
+cd backend && uv run pytest
+cd frontend && npm test && npm run lint && npm run build
 ```
 
-It reports the database size against the limit and warns above 80 percent. Compute hours are shown in the Neon Console.
+The suites cover teaching rules, proof inspection, math checks, token verification, request limits, accounts, saving, voice, plots, and the reasoning graph. No automated test calls a model or Neon. The row level security tests run against a local Postgres when `HETU_TEST_DATABASE_URL` is set. `scripts.check_isolation` repeats them against a real Neon project with two accounts.
 
-## Testing
+## Limitations
 
-```bash
-cd backend
-uv run pytest
-```
-
-150 tests, 16 of which run only with a disposable local Postgres:
-
-```bash
-HETU_TEST_DATABASE_URL=postgresql://postgres@localhost:5432/postgres uv run pytest tests/test_rls.py
-```
-
-The database tests apply the real migration and act as two users and a guest with plain SQL. They check that no user can read, change, delete, or add to another user's rows, forge an owner, or hand over ownership. Locally, `auth.user_id()` is a stand-in in `db/test/neon_stand_in.sql` that reads the same claim. The other tests cover routing and teaching rules, proof inspection, the math checks, token verification with real Ed25519 keys, and the request limits.
-
-To check isolation on the real Neon project, create two confirmed accounts and run:
-
-```bash
-uv run python -m scripts.check_isolation --a-email a@example.com --b-email b@example.com
-```
-
-```bash
-cd frontend
-npm test
-npm run build
-npm run lint
-```
-
-159 tests. They cover the conversation, dictation and read aloud with the browser speech APIs replaced, the graph grammar including unsafe input, guest behavior, the theme setting, graph layout and zoom, sign-in, email codes, password reset, saving, reopening, renaming, and deleting conversations, the workspace draft, the save prompt for guest work, failed saves, the reasoning graph, and the API client. Neon is replaced by fakes in these tests.
-
-To see a real model's behavior, which the provider may bill: `uv run python -m scripts.evaluate_scenarios`.
-
-## Security and privacy
-
-- Groq keys and the database connection string stay off the frontend. The browser holds only public addresses and the signed-in user's own short-lived token.
-- Every table has row-level security. A user can reach only rows whose owner matches the `sub` of their verified token. The browser never sends a user id that is trusted.
-- The API verifies tokens against Neon Auth's public keys and accepts only EdDSA signatures with the expected issuer, audience, and expiry. An invalid token is treated as a guest.
-- Tokens and profile details are not put into model prompts. Student messages, notes, and shared drafts are sent to the model provider.
-- Guest work is not sent to the database. A conversation saved in the browser by an earlier version is offered, never deleted without asking.
-- Request limits are counted in memory and reset on restart. They slow spending down and do not cap it. Set a spend limit with the provider.
-
-## Known limitations
-
-- Hetu is a language model. It can be wrong. Nothing is formally verified.
-- No study with students has been done. The scenario script checks routing, not teaching quality.
-- Session notes are tentative readings of one conversation, not a measure of what a student knows.
-- A request carries at most the last 24 messages.
-- The isolation of saved data has been tested on a local Postgres with a stand-in for Neon's `auth.user_id()`. Run `scripts.check_isolation` to confirm it on Neon.
-- Neon Auth may not allow an account to delete its own sign-in. Then **Delete my data** removes everything Hetu stores, and the sign-in record (email and name) remains.
-- The workspace holds one draft per account.
-- The reasoning graph exists only for mathematical arguments.
-- Hetu cannot run code, browse, or read files and images.
-- Dictation works only where the browser offers speech recognition, such as Chrome, Edge, and Safari. Firefox does not. Read aloud uses whatever voices the device has.
-- Graphs cover functions of one variable and marked points. There are no bar charts, scatter plots of data files, or diagrams yet.
-- Automated accessibility checks pass. The interface has not been tested with a screen reader.
+- Hetu has not yet been studied with students.
+- Session notes are readings of one conversation, not a measure of what a student knows.
+- Hetu cannot run code, browse, or read images.
+- Dictation needs a browser with speech recognition, such as Chrome, Edge, or Safari.
+- Plots cover functions of one variable.
 
 ## License
 
-The application code is licensed under the Apache License 2.0. See `LICENSE` and `NOTICE`.
-
-The license covers this code only. The language models, Neon, and the provider's service are separate works with their own terms.
+Apache License 2.0. See `LICENSE` and `NOTICE`. The license covers this code only. Models, Neon, and Groq have their own terms.

@@ -8,6 +8,7 @@ import { MicButton } from '../voice/MicButton'
 import { ReadAloud } from '../voice/ReadAloud'
 import { stop as stopSpeaking } from '../voice/speech'
 import { useDictation } from '../voice/useDictation'
+import { useReveal } from './reveal'
 import { SessionNotes } from './SessionNotes'
 import type { ConversationState, Turn } from './useConversation'
 import { STARTS } from './starts'
@@ -86,10 +87,56 @@ export function Conversation({
     if (turns.length === 0) stopSpeaking()
   }, [turns.length])
 
-  // Keep the newest message in view. scrollIntoView is missing in some test environments.
+  // When a new reply arrives, the question it answers moves to the top, so
+  // the reply is read from its start. The reply is still short then, so the
+  // view follows it as it grows until the question reaches the top. Any
+  // scrolling by the student ends that. Otherwise the newest message stays
+  // in view. scrollIntoView and ResizeObserver are missing in some test
+  // environments.
+  const scroller = useRef<HTMLDivElement>(null)
+  const log = useRef<HTMLDivElement>(null)
+  const pinned = useRef<Element | null>(null)
   useEffect(() => {
+    pinned.current = null
+    const last = turns.at(-1)
+    if (last?.role === 'hetu' && last.fresh) {
+      const question = turns.at(-2)
+      const element = question && log.current?.querySelector(`[data-turn="${question.id}"]`)
+      if (element) {
+        pinned.current = element
+        element.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
+        return
+      }
+    }
     if (turns.length > 0 || busy) end.current?.scrollIntoView?.({ block: 'nearest' })
-  }, [turns.length, busy])
+  }, [turns, busy])
+
+  const hasTurns = turns.length > 0
+  useEffect(() => {
+    const box = scroller.current
+    const content = log.current
+    if (!box || !content || typeof ResizeObserver === 'undefined') return
+    const release = () => (pinned.current = null)
+    const follow = new ResizeObserver(() => {
+      const element = pinned.current
+      if (!element) return
+      if (element.getBoundingClientRect().top - box.getBoundingClientRect().top <= 17) release()
+      else element.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    })
+    follow.observe(content)
+    const keys = (event: globalThis.KeyboardEvent) => {
+      if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) release()
+    }
+    box.addEventListener('wheel', release, { passive: true })
+    box.addEventListener('touchmove', release, { passive: true })
+    box.addEventListener('keydown', keys)
+    return () => {
+      follow.disconnect()
+      box.removeEventListener('wheel', release)
+      box.removeEventListener('touchmove', release)
+      box.removeEventListener('keydown', keys)
+    }
+  }, [hasTurns])
 
   // Something outside the composer asked for the cursor, such as "Ask about the selection".
   useEffect(() => {
@@ -121,7 +168,7 @@ export function Conversation({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+      <div ref={scroller} className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
         <div
           className={
             'mx-auto flex min-h-full w-full flex-col px-5 pt-6 pb-8 sm:px-8 ' +
@@ -147,7 +194,7 @@ export function Conversation({
                 <SessionNotes notes={notes} onRemove={conversation.removeNote} />
               </div>
 
-              <div role="log" aria-label="Conversation" className="space-y-8">
+              <div ref={log} role="log" aria-label="Conversation" className="space-y-8">
                 {turns.map((turn) => (
                   <Message key={turn.id} turn={turn} workspace={workspace} onOpenInspection={onOpenInspection} />
                 ))}
@@ -193,7 +240,7 @@ export function Conversation({
         </div>
       </div>
 
-      <div className="border-t border-rule bg-paper">
+      <div className="border-t border-rule">
         <BackendStatus className="mx-auto w-full max-w-3xl px-5 pt-3 text-sm sm:px-8" />
         {/* Notices sit by the composer, so they are seen however far the conversation has scrolled. */}
         {notices.length > 0 && (
@@ -319,7 +366,8 @@ function Message({
     return (
       <article
         aria-label="You said"
-        className="ml-auto w-fit max-w-[92%] rounded-lg border border-rule bg-surface px-4 py-3 sm:max-w-[85%]"
+        data-turn={turn.id}
+        className="ml-auto w-fit max-w-[92%] scroll-mt-4 rounded-lg border border-rule bg-surface px-4 py-3 sm:max-w-[85%]"
       >
         <h3 className="eyebrow">You</h3>
         <StudentText text={turn.content} />
@@ -334,10 +382,24 @@ function Message({
     )
   }
 
+  return <HetuMessage turn={turn} workspace={workspace} onOpenInspection={onOpenInspection} />
+}
+
+/** One of Hetu's replies. A reply that just arrived is revealed a few words at a time. */
+function HetuMessage({
+  turn,
+  workspace,
+  onOpenInspection,
+}: {
+  turn: Turn
+  workspace: WorkspaceContext | null
+  onOpenInspection: (inspection: ProofInspection) => void
+}) {
+  const revealed = useReveal(turn.id, turn.content, Boolean(turn.fresh))
   return (
-    <article aria-label="Hetu said">
+    <article aria-label="Hetu said" data-turn={turn.id} aria-busy={!revealed.done}>
       <h3 className="eyebrow mb-1 text-accent">Hetu</h3>
-      <Markdown text={turn.content} />
+      <Markdown text={revealed.visible} />
 
       {(turn.checks ?? []).length > 0 && (
         <div className="mt-4 rounded-md border border-rule bg-surface px-4 py-3 text-sm">

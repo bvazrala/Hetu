@@ -29,6 +29,8 @@ export interface Turn {
   specialists?: Specialist[]
   checks?: ToolCheck[]
   inspection?: ProofInspection | null
+  /** True for a reply that arrived in this visit, so it can be revealed gradually. Never saved. */
+  fresh?: boolean
 }
 
 /** The note lists a student can correct by removing an item. */
@@ -282,6 +284,7 @@ export function useConversation(store: Store | null = null) {
           id: nextId.current++,
           role: 'hetu',
           content: response.reply,
+          fresh: true,
           action: response.action,
           specialists: response.specialists,
           checks: response.checks,

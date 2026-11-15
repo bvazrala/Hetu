@@ -40,6 +40,7 @@
   --color-logo-ink: #132b1c;
   --color-logo-stem: #2c4a2e;
   --color-logo-bar: #8cad6c;
+  --paper-texture-opacity: 1;
 
   /* System fonts only, so the page does not depend on a font server. */
   --font-serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
@@ -61,6 +62,26 @@
   #root {
     height: 100%;
     overflow: clip;
+  }
+
+  /* Crumpled paper under the whole app. The tile is mid grey on average, so
+     "soft-light" leaves the paper color as it is and only lifts and shades
+     the facets, in either theme. Cards and dialogs keep their solid fill. */
+  #root {
+    position: relative;
+    isolation: isolate;
+    background-color: var(--color-paper);
+  }
+  #root::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image: url('/paper-texture.png');
+    background-size: 512px;
+    mix-blend-mode: soft-light;
+    opacity: var(--paper-texture-opacity);
   }
 
   :focus-visible {
@@ -104,6 +125,7 @@
   --color-logo-ink: #ece8dc;
   --color-logo-stem: #c3d6c0;
   --color-logo-bar: #8cb56c;
+  --paper-texture-opacity: 0.22;
 }
 
 @layer base {
