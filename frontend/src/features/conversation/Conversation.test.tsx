@@ -26,7 +26,15 @@ const NOTES: LearningState = {
 }
 
 function reply(text: string, extra: Partial<ChatResponse> = {}): ChatResponse {
-  return { reply: text, action: 'explain', specialists: [], learning_state: NOTES, inspection: null, checks: [], ...extra }
+  return {
+    reply: text,
+    action: 'explain',
+    specialists: [],
+    learning_state: NOTES,
+    inspection: null,
+    checks: [],
+    ...extra,
+  }
 }
 
 const field = () => screen.getByLabelText<HTMLTextAreaElement>('Message Hetu')
@@ -170,13 +178,19 @@ describe('the conversation', () => {
     await screen.findByText('Light scatters off air.')
 
     const next = screen.getByRole('group', { name: 'Next step' })
-    expect(within(next).getAllByRole('button').map((button) => button.textContent)).toEqual(['Show an example', 'Let me try'])
+    expect(
+      within(next)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['Show an example', 'Let me try'])
     await userEvent.click(within(next).getByRole('button', { name: 'Show an example' }))
 
     expect(chat.mock.calls[1][0].assist).toBe('example')
     expect(within(log()).getByText('Show me an example.')).toBeInTheDocument()
     await screen.findByText('Here is one.')
-    expect(within(screen.getByRole('group', { name: 'Next step' })).getByRole('button', { name: 'Let me try' })).toBeInTheDocument()
+    expect(
+      within(screen.getByRole('group', { name: 'Next step' })).getByRole('button', { name: 'Let me try' }),
+    ).toBeInTheDocument()
   })
 
   it('lets the student remove a note, and Hetu is told not to add it back', async () => {
@@ -204,7 +218,12 @@ describe('the conversation', () => {
   it('shows the result of an exact check apart from the reply', async () => {
     chat.mockResolvedValue(
       reply('Try a small number.', {
-        checks: [{ tool: 'find_counterexample', result: 'COUNTEREXAMPLE: n = 2. The hypothesis holds and the conclusion fails.' }],
+        checks: [
+          {
+            tool: 'find_counterexample',
+            result: 'COUNTEREXAMPLE: n = 2. The hypothesis holds and the conclusion fails.',
+          },
+        ],
       }),
     )
     render(<App />)
@@ -252,7 +271,10 @@ describe('a session', () => {
   })
 
   it('deletes the earlier conversation when the student chooses to', async () => {
-    window.localStorage.setItem('hetu.session.v1', JSON.stringify({ turns: [{ id: 1, role: 'student', content: 'Old.' }] }))
+    window.localStorage.setItem(
+      'hetu.session.v1',
+      JSON.stringify({ turns: [{ id: 1, role: 'student', content: 'Old.' }] }),
+    )
     render(<App />)
     await userEvent.click(screen.getByRole('button', { name: 'Delete it' }))
     expect(window.localStorage.getItem('hetu.session.v1')).toBeNull()
@@ -384,7 +406,9 @@ describe('the workspace and the conversation', () => {
   })
 
   it('quotes a step from the structure view in the composer', async () => {
-    chat.mockResolvedValue(reply('Look at your last step.', { inspection: { problem: PROBLEM, draft: DRAFT, analysis: LIVE_ANALYSIS } }))
+    chat.mockResolvedValue(
+      reply('Look at your last step.', { inspection: { problem: PROBLEM, draft: DRAFT, analysis: LIVE_ANALYSIS } }),
+    )
     render(<App />)
     await say('Here is my proof.')
     await userEvent.click(await screen.findByRole('button', { name: 'Open reasoning graph' }))
@@ -411,14 +435,41 @@ describe('the workspace and the conversation', () => {
   })
 })
 
+describe('graphs in a reply', () => {
+  it('draws a plot block as a graph with a text description', async () => {
+    chat.mockResolvedValue(
+      reply(
+        'Here it is.\n\n```plot\n{"variable": "t", "x": [0, 4], "xLabel": "t (s)", "functions": [{"expr": "2*t^2", "label": "s = 2t^2"}]}\n```',
+      ),
+    )
+    render(<App />)
+    await say('Graph it.')
+    const graph = await screen.findByRole('img', { name: 'Graph of s = 2t^2, for t (s) from 0 to 4.' })
+    expect(graph.querySelector('polyline')).not.toBeNull()
+    expect(screen.queryByText(/"functions"/)).toBeNull()
+  })
+
+  it('says why a graph could not be drawn instead of failing silently', async () => {
+    chat.mockResolvedValue(reply('```plot\n{"x": [0, 1], "functions": ["alert(1)"]}\n```'))
+    render(<App />)
+    await say('Graph it.')
+    expect(await screen.findByText('This graph could not be drawn.')).toBeInTheDocument()
+    expect(screen.getByText(/"alert" is not a known name/)).toBeInTheDocument()
+  })
+})
+
 describe('normalizeMath', () => {
   it('keeps a displayed equation inline inside a table row, so the table stays whole', () => {
     const table = '| Law | Formula |\n| --- | --- |\n| 2nd | $$F = ma$$ |\n| 3rd | \\[F_{AB} = -F_{BA}\\] |'
-    expect(normalizeMath(table)).toBe('| Law | Formula |\n| --- | --- |\n| 2nd | $F = ma$ |\n| 3rd | $F_{AB} = -F_{BA}$ |')
+    expect(normalizeMath(table)).toBe(
+      '| Law | Formula |\n| --- | --- |\n| 2nd | $F = ma$ |\n| 3rd | $F_{AB} = -F_{BA}$ |',
+    )
   })
 
   it('renders such a table with every row intact', async () => {
-    chat.mockResolvedValue(reply('| Law | Formula |\n| --- | --- |\n| 2nd | $$F = ma$$ |\n| 3rd | Equal and opposite |'))
+    chat.mockResolvedValue(
+      reply('| Law | Formula |\n| --- | --- |\n| 2nd | $$F = ma$$ |\n| 3rd | Equal and opposite |'),
+    )
     render(<App />)
     await say('Newton?')
     const hetu = await screen.findByRole('article', { name: 'Hetu said' })

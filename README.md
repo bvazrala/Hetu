@@ -27,6 +27,8 @@ Learning
 - **Five specialists.** Mathematics, science, programming, writing and humanities, and logic. Only the one that fits a turn is used, unless a question spans two subjects.
 - **Exact checks in mathematics.** Integer counterexample search and symbolic comparison of expressions. Results are shown apart from the reply and labelled as computed.
 - **A second reader in logic.** Before the logic specialist says an argument has a flaw, a second agent checks whether the flaw is really there.
+- **Graphs.** When a graph helps, Hetu describes one in a small `plot` block: functions of one variable, a range, labels, and marked points. The browser computes every point and draws it, so the curve is exact. Expressions are read by a fixed grammar of arithmetic and math functions; nothing is run as code. A description that cannot be drawn says why.
+- **Voice.** A microphone button dictates into the message box with the browser's speech recognition. The text can be edited and is never sent automatically. Each reply has **Listen**, with pause and stop, using the browser's speech synthesis; one reply plays at a time. Both are hidden or explained where a browser lacks them. In Chrome, dictated audio goes to the browser maker's speech service, not to Hetu.
 - **Session notes.** Four groups: discussed, shown by the student, possible misconceptions, and still exploring. Only the student's own words and work count as shown. The student can remove any note, and Hetu does not add it back.
 
 Workspace
@@ -44,7 +46,7 @@ Accounts
 Interface
 
 - **Light and dark themes.** A button beside **Workspace** steps through system, light, and dark. The choice is remembered in the browser and applied before the page draws.
-- **First screen.** The three starting points, and for a signed-in student on a narrow screen, their three most recent conversations.
+- **First screen.** A headline, the three starting points, and on wide screens a hand-written example of Hetu answering a proof, over a slow WebGL shader in the theme's colors. The shader shows a still frame when the device asks for reduced motion, pauses in a hidden tab, and falls back to a gradient without WebGL. A signed-in student on a narrow screen also sees their three most recent conversations.
 - **Quiet status.** One word in the header says whether the conversation is saved. Server problems appear only when there is one.
 - **Accessibility.** Keyboard access throughout, a skip link, live regions for status, a text version of the graph, and reduced motion.
 
@@ -227,7 +229,7 @@ npm run build
 npm run lint
 ```
 
-120 tests. They cover the conversation, guest behavior, the theme setting, graph layout and zoom, sign-in, email codes, password reset, saving, reopening, renaming, and deleting conversations, the workspace draft, the save prompt for guest work, failed saves, the reasoning graph, and the API client. Neon is replaced by fakes in these tests.
+159 tests. They cover the conversation, dictation and read aloud with the browser speech APIs replaced, the graph grammar including unsafe input, guest behavior, the theme setting, graph layout and zoom, sign-in, email codes, password reset, saving, reopening, renaming, and deleting conversations, the workspace draft, the save prompt for guest work, failed saves, the reasoning graph, and the API client. Neon is replaced by fakes in these tests.
 
 To see a real model's behavior, which the provider may bill: `uv run python -m scripts.evaluate_scenarios`.
 
@@ -251,6 +253,8 @@ To see a real model's behavior, which the provider may bill: `uv run python -m s
 - The workspace holds one draft per account.
 - The reasoning graph exists only for mathematical arguments.
 - Hetu cannot run code, browse, or read files and images.
+- Dictation works only where the browser offers speech recognition, such as Chrome, Edge, and Safari. Firefox does not. Read aloud uses whatever voices the device has.
+- Graphs cover functions of one variable and marked points. There are no bar charts, scatter plots of data files, or diagrams yet.
 - Automated accessibility checks pass. The interface has not been tested with a screen reader.
 
 ## License

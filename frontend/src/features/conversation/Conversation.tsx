@@ -4,6 +4,10 @@ import { Markdown } from '../../components/Markdown'
 import { MAX_MESSAGE_CHARS } from '../../lib/api'
 import { graphIsUseful } from '../../lib/graph'
 import type { Assist, ProofInspection, WorkspaceContext } from '../../lib/types'
+import { MicButton } from '../voice/MicButton'
+import { ReadAloud } from '../voice/ReadAloud'
+import { stop as stopSpeaking } from '../voice/speech'
+import { useDictation } from '../voice/useDictation'
 import { SessionNotes } from './SessionNotes'
 import type { ConversationState, Turn } from './useConversation'
 import { STARTS } from './starts'
@@ -75,6 +79,12 @@ export function Conversation({
   const { turns, notes, intent, input, setInput, assist, setAssist, busy, error, loading } = conversation
   const end = useRef<HTMLDivElement>(null)
   const field = useRef<HTMLTextAreaElement>(null)
+  const dictation = useDictation(input, setInput)
+
+  // Leaving a conversation stops any reply that is being read aloud.
+  useEffect(() => {
+    if (turns.length === 0) stopSpeaking()
+  }, [turns.length])
 
   // Keep the newest message in view. scrollIntoView is missing in some test environments.
   useEffect(() => {
@@ -91,6 +101,7 @@ export function Conversation({
 
   function submit() {
     if (busy || input.trim() === '') return
+    dictation.stop()
     conversation.send(input, { workspace: conversation.attachWorkspace && workspace ? workspace : undefined })
   }
 
@@ -111,7 +122,12 @@ export function Conversation({
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
-        <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col px-5 pt-6 pb-8 sm:px-8">
+        <div
+          className={
+            'mx-auto flex min-h-full w-full flex-col px-5 pt-6 pb-8 sm:px-8 ' +
+            (turns.length === 0 && !loading ? 'max-w-6xl' : 'max-w-3xl')
+          }
+        >
           {loading ? (
             <p aria-live="polite" className="py-10 text-muted">
               Opening the conversation…
@@ -210,12 +226,13 @@ export function Conversation({
               className="block max-h-60 min-h-14 w-full [field-sizing:content] resize-none bg-transparent px-4 pt-3 pb-1 font-serif text-lg leading-relaxed outline-none placeholder:text-muted focus-visible:outline-none"
             />
             <div className="flex flex-wrap items-center gap-2 px-2 pb-2">
+              <MicButton dictation={dictation} />
               <label className="flex items-center gap-1.5 rounded-md px-2 text-sm text-muted">
-                <span>Help</span>
+                <span className="sr-only sm:not-sr-only">Help</span>
                 <select
                   value={assist ?? ''}
                   onChange={(event) => setAssist((event.target.value || null) as Assist | null)}
-                  className="rounded-md border border-rule bg-paper py-1 pr-1 pl-2 text-sm text-ink"
+                  className="max-w-40 rounded-md border border-rule bg-paper py-1 pr-1 pl-2 text-sm text-ink sm:max-w-none"
                 >
                   <option value="">Let Hetu decide</option>
                   {ASSIST_OPTIONS.map((option) => (
@@ -247,6 +264,11 @@ export function Conversation({
           </div>
           <p id="message-hint" className="sr-only">
             Enter sends. Shift and Enter add a new line.
+          </p>
+          <p role="status" className={dictation.listening || dictation.message ? 'mt-2 text-sm text-muted' : 'sr-only'}>
+            {dictation.listening
+              ? 'Listening. Your words appear in the box. Stop when you are done, then edit and send.'
+              : dictation.message}
           </p>
         </form>
       </div>
@@ -331,6 +353,10 @@ function Message({
       {turn.inspection && (
         <InspectionCard inspection={turn.inspection} workspace={workspace} onOpen={onOpenInspection} />
       )}
+
+      <div className="mt-2 -ml-2">
+        <ReadAloud id={String(turn.id)} text={turn.content} />
+      </div>
     </article>
   )
 }

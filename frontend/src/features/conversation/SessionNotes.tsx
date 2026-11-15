@@ -8,7 +8,11 @@ interface Props {
 
 const GROUPS: { list: NoteList; title: string; empty: string }[] = [
   { list: 'concepts', title: 'Discussed', empty: 'Nothing yet.' },
-  { list: 'understood', title: 'You have shown', empty: 'Nothing yet. This fills in from your own explanations and work.' },
+  {
+    list: 'understood',
+    title: 'You have shown',
+    empty: 'Nothing yet. This fills in from your own explanations and work.',
+  },
   { list: 'misconceptions', title: 'Possible misconceptions', empty: 'None noted.' },
   { list: 'open_questions', title: 'Still exploring', empty: 'Nothing noted.' },
 ]
@@ -69,8 +73,8 @@ export function SessionNotes({ notes, onRemove }: Props) {
           ))}
         </div>
         <p className="text-xs text-muted">
-          Hetu keeps these notes to follow this session. They are tentative readings of the conversation, not a
-          measure of what you know. Remove anything that is wrong and Hetu will not add it back.
+          Hetu keeps these notes to follow this session. They are tentative readings of the conversation, not a measure
+          of what you know. Remove anything that is wrong and Hetu will not add it back.
         </p>
       </div>
     </details>

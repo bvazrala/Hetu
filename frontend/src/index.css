@@ -149,6 +149,28 @@
   }
 }
 
+/* The example exchange on the first screen appears one part at a time. */
+@keyframes hero-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@layer components {
+  .hero-step {
+    animation: hero-in 0.6s ease-out both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hero-step {
+      animation: none;
+    }
+  }
+}
+
 /* Shared controls. Every button and field in the app uses one of these. */
 @layer components {
   .btn {

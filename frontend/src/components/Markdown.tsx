@@ -5,6 +5,7 @@ import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import { normalizeMath } from '../lib/math'
+import { Plot } from './Plot'
 
 /**
  * Renders a reply written in Markdown, with typeset math and formatted code.
@@ -37,7 +38,18 @@ export function Markdown({ text }: { text: string }) {
               <table>{children}</table>
             </div>
           ),
-          pre: ({ children }) => <pre tabIndex={0}>{children}</pre>,
+          // A ```plot block is a graph Hetu described. Any other block is code.
+          pre: ({ children, node }) => {
+            const code = node?.children[0]
+            if (code?.type === 'element' && code.tagName === 'code') {
+              const classes = code.properties?.className
+              if (Array.isArray(classes) && classes.includes('language-plot')) {
+                const source = code.children.map((child) => (child.type === 'text' ? child.value : '')).join('')
+                return <Plot source={source} />
+              }
+            }
+            return <pre tabIndex={0}>{children}</pre>
+          },
           h1: heading(1),
           h2: heading(2),
           h3: heading(3),
